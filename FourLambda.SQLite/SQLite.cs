@@ -722,8 +722,17 @@ public partial class SQLiteConnection : ISQLiteConnection
 
 			// Build query.
 			var query = "create " + @virtual + "table if not exists \"" + map.TableName + "\" " + @using + "(\n";
-			var decls = map.Columns.Select(p => Orm.SqlDecl(p, StoreDateTimeAsTicks, StoreTimeSpanAsTicks));
-			var decl = string.Join(",\n", decls.ToArray());
+
+			var isCompositePk = map.PrimaryKeyColumns.Length > 1;
+			var decls = new List<string>();
+
+			foreach (var column in map.Columns)
+				decls.Add(Orm.SqlDecl(column, isCompositePk));
+
+			if (isCompositePk)
+				decls.Add($"PRIMARY KEY ({string.Join(", ", map.PrimaryKeyColumns.Select(x => x.Name))})");
+
+			var decl = string.Join(",\n", decls);
 			query += decl;
 			query += ")";
 			if (map.WithoutRowId)
@@ -1046,9 +1055,14 @@ public partial class SQLiteConnection : ISQLiteConnection
 			}
 		}
 
+		if (toBeAdded.Any(x => x.IsPK))
+		{
+			throw new InvalidOperationException("A column set as a primary key cannot be added to an existing table.");
+		}
+
 		foreach (var p in toBeAdded)
 		{
-			var addCol = "alter table \"" + map.TableName + "\" add column " + Orm.SqlDecl(p, StoreDateTimeAsTicks, StoreTimeSpanAsTicks);
+			var addCol = $"alter table \"{map.TableName}\" add column {Orm.SqlDecl(p, map.PrimaryKeyColumns.Length > 1)}";
 			Execute(addCol);
 		}
 	}
@@ -3132,7 +3146,7 @@ public static class Orm
 		return obj.GetType();
 	}
 
-	public static string SqlDecl(TableMapping.Column p, bool storeDateTimeAsTicks, bool storeTimeSpanAsTicks)
+	public static string SqlDecl(TableMapping.Column p, bool compositeKey)
 	{
 		var sqliteType = p.SqliteType switch
 		{
@@ -3145,14 +3159,20 @@ public static class Orm
 		};
 
 		string decl = $"\"{p.Name}\" {sqliteType} ";
+
+		if (!compositeKey)
+		{
 		if (p.IsPK)
 		{
 			decl += "primary key ";
 		}
+
 		if (p.IsAutoInc)
 		{
 			decl += "autoincrement ";
 		}
+		}
+
 		if (!p.IsNullable)
 		{
 			decl += "not null ";
