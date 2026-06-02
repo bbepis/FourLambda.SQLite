@@ -1399,7 +1399,14 @@ public partial class SQLiteConnection : ISQLiteConnection
 		T>(object pk) where T : new()
 	{
 		var map = GetMapping(typeof(T));
-		return Query<T>(map.GetByPrimaryKeySql, pk).First();
+
+		if (map.PKWhereSql == null)
+			throw new ArgumentException("Cannot use Get() on a table that does not have a primary key");
+
+		if (map.PrimaryKeyColumns.Length > 0)
+			throw new NotImplementedException(); // TODO: implement
+
+		return Query<T>($"select * from \"{map.TableName}\" {map.PKWhereSql}", pk).First();
 	}
 
 	/// <summary>
@@ -1419,7 +1426,13 @@ public partial class SQLiteConnection : ISQLiteConnection
 	/// </returns>
 	public object Get(object pk, TableMapping map)
 	{
-		return Query(map, map.GetByPrimaryKeySql, pk).First();
+		if (map.PKWhereSql == null)
+			throw new ArgumentException("Cannot use Get() on a table that does not have a primary key");
+
+		if (map.PrimaryKeyColumns.Length > 0)
+			throw new NotImplementedException(); // TODO: implement
+
+		return Query(map, $"select * from \"{map.TableName}\" {map.PKWhereSql}", pk).First();
 	}
 
 	/// <summary>
@@ -1457,7 +1470,14 @@ public partial class SQLiteConnection : ISQLiteConnection
 		T>(object pk) where T : new()
 	{
 		var map = GetMapping(typeof(T));
-		return Query<T>(map.GetByPrimaryKeySql, pk).FirstOrDefault();
+
+		if (map.PKWhereSql == null)
+			throw new ArgumentException("Cannot use Find() on a table that does not have a primary key");
+
+		if (map.PrimaryKeyColumns.Length > 0)
+			throw new NotImplementedException(); // TODO: implement
+
+		return Query<T>($"select * from \"{map.TableName}\" {map.PKWhereSql}", pk).FirstOrDefault();
 	}
 
 	/// <summary>
@@ -1477,7 +1497,13 @@ public partial class SQLiteConnection : ISQLiteConnection
 	/// </returns>
 	public object Find(object pk, TableMapping map)
 	{
-		return Query(map, map.GetByPrimaryKeySql, pk).FirstOrDefault();
+		if (map.PKWhereSql == null)
+			throw new ArgumentException("Cannot use Find() on a table that does not have a primary key");
+
+		if (map.PrimaryKeyColumns.Length > 0)
+			throw new NotImplementedException(); // TODO: implement
+
+		return Query(map, $"select * from \"{map.TableName}\" {map.PKWhereSql}", pk).FirstOrDefault();
 	}
 
 	/// <summary>
@@ -2072,11 +2098,11 @@ public partial class SQLiteConnection : ISQLiteConnection
 
 		var map = GetMapping(objType);
 
-		if (map.PK != null && map.PK.IsAutoGuid)
+		if (map.PrimaryKeyColumns.Length == 1 && map.PrimaryKeyColumns[0].IsAutoGuid)
 		{
-			if (map.PK.GetValue(obj).Equals(Guid.Empty))
+			if (map.PrimaryKeyColumns[0].GetValue(obj).Equals(Guid.Empty))
 			{
-				map.PK.SetValue(obj, Guid.NewGuid());
+				map.PrimaryKeyColumns[0].SetValue(obj, Guid.NewGuid());
 			}
 		}
 
@@ -2230,31 +2256,30 @@ public partial class SQLiteConnection : ISQLiteConnection
 
 		var map = GetMapping(objType);
 
-		var pk = map.PK;
-
-		if (pk == null)
+		if (map.PrimaryKeyColumns.Length == 0)
 		{
 			throw new NotSupportedException("Cannot update " + map.TableName + ": it has no PK");
 		}
 
-		var cols = from p in map.Columns
-			where p != pk
-			select p;
-		var vals = from c in cols
-			select c.GetValue(obj);
+		// TODO: optimize this & all non-setup LINQ
+		var cols = map.Columns.Where(p => !p.IsPK);
+		var vals = cols.Select(c => c.GetValue(obj));
 		var ps = new List<object>(vals);
 		if (ps.Count == 0)
 		{
 			// There is a PK but no accompanying data,
 			// so reset the PK to make the UPDATE work.
 			cols = map.Columns;
-			vals = from c in cols
-				select c.GetValue(obj);
+			vals = cols.Select(c => c.GetValue(obj));
 			ps = new List<object>(vals);
 		}
-		ps.Add(pk.GetValue(obj));
-		var q = string.Format("update \"{0}\" set {1} where \"{2}\" = ? ", map.TableName, string.Join(",", (from c in cols
-			select "\"" + c.Name + "\" = ? ").ToArray()), pk.Name);
+
+		foreach (var pk in map.PrimaryKeyColumns)
+			ps.Add(pk.GetValue(obj));
+
+		var q = string.Format("update \"{0}\" set {1} {2}", map.TableName,
+			string.Join(",", cols.Select(c => "\"" + c.Name + "\" = ? ").ToArray()),
+			map.PKWhereSql);
 
 		try
 		{
@@ -2325,13 +2350,16 @@ public partial class SQLiteConnection : ISQLiteConnection
 	public int Delete(object objectToDelete)
 	{
 		var map = GetMapping(Orm.GetType(objectToDelete));
-		var pk = map.PK;
-		if (pk == null)
+
+		if (map.PrimaryKeyColumns.Length == 0)
 		{
 			throw new NotSupportedException("Cannot delete " + map.TableName + ": it has no PK");
 		}
-		var q = string.Format("delete from \"{0}\" where \"{1}\" = ?", map.TableName, pk.Name);
-		var count = Execute(q, pk.GetValue(objectToDelete));
+
+		var q = string.Format("delete from \"{0}\" {1}", map.TableName, map.PKWhereSql);
+
+		var count = Execute(q, map.PrimaryKeyColumns.Select(x => x.GetValue(objectToDelete)).ToArray());
+
 		if (count > 0)
 			OnTableChanged(map, NotifyTableChangedAction.Delete);
 		return count;
@@ -2370,12 +2398,11 @@ public partial class SQLiteConnection : ISQLiteConnection
 	/// </returns>
 	public int Delete(object primaryKey, TableMapping map)
 	{
-		var pk = map.PK;
-		if (pk == null)
+		if (map.PrimaryKeyColumns.Length == 0)
 		{
 			throw new NotSupportedException("Cannot delete " + map.TableName + ": it has no PK");
 		}
-		var q = string.Format("delete from \"{0}\" where \"{1}\" = ?", map.TableName, pk.Name);
+		var q = string.Format("delete from \"{0}\" {1}", map.TableName, map.PKWhereSql);
 		var count = Execute(q, primaryKey);
 		if (count > 0)
 			OnTableChanged(map, NotifyTableChangedAction.Delete);
@@ -2706,6 +2733,7 @@ public class ColumnAttribute : Attribute
 [AttributeUsage(AttributeTargets.Property)]
 public class PrimaryKeyAttribute : Attribute
 {
+	public int Order { get; set; }
 }
 
 [AttributeUsage(AttributeTargets.Property)]
@@ -2800,15 +2828,15 @@ public class TableMapping
 
 	public Column[] Columns { get; private set; }
 
-	public Column PK { get; private set; }
+	public Column[] PrimaryKeyColumns { get; private set; }
 
-	public string GetByPrimaryKeySql { get; private set; }
+	public string? PKWhereSql { get; private set; }
 
 	public CreateFlags CreateFlags { get; private set; }
 
 	internal MapMethod Method { get; private set; } = MapMethod.ByName;
 
-	readonly Column _autoPk;
+	readonly Column? _autoPk;
 	readonly Column[] _insertColumns;
 	readonly Column[] _insertOrReplaceColumns;
 
@@ -2834,28 +2862,34 @@ public class TableMapping
 				cols.Add(new Column(m, createFlags));
 		}
 		Columns = cols.ToArray();
-		foreach (var c in Columns)
+
+		PrimaryKeyColumns = Columns.Where(c => c.IsPK).OrderBy(c => c.PKOrder).ToArray();
+
+		if (PrimaryKeyColumns.Length > 1)
 		{
-			if (c.IsAutoInc && c.IsPK)
-			{
-				_autoPk = c;
-			}
-			if (c.IsPK)
-			{
-				PK = c;
-			}
+			if (PrimaryKeyColumns.Any(c => c.IsAutoInc))
+				throw new ArgumentException("Table with composite primary key cannot have auto incrementing");
+
+			if (PrimaryKeyColumns.Count(c => c.PKOrder == 0) > 1)
+				throw new ArgumentException("Table with composite primary key must have explicit ordering of individual primary keys");
+		}
+		else
+		{
+			_autoPk = PrimaryKeyColumns.FirstOrDefault(x => x.IsAutoInc);
 		}
 
 		HasAutoIncPK = _autoPk != null;
 
-		if (PK != null)
+		if (PrimaryKeyColumns.Length > 0)
 		{
-			GetByPrimaryKeySql = string.Format("select * from \"{0}\" where \"{1}\" = ?", TableName, PK.Name);
+			// TODO: proper string escaping everywhere
+			// TODO: cache built queries for SELECT, UPDATE, DELETE
+			PKWhereSql = "where " + string.Join(" and ", PrimaryKeyColumns.Select(pk => $"\"{pk.Name}\" = ?"));
 		}
 		else
 		{
 			// People should not be calling Get/Find without a PK
-			GetByPrimaryKeySql = string.Format("select * from \"{0}\" limit 1", TableName);
+			PKWhereSql = null;
 		}
 
 		_insertColumns = Columns.Where(c => !c.IsAutoInc).ToArray();
@@ -2969,7 +3003,8 @@ public class TableMapping
 		public bool IsAutoInc { get; private set; }
 		public bool IsAutoGuid { get; private set; }
 
-		public bool IsPK { get; private set; }
+		public bool IsPK => PKOrder != null;
+		public int? PKOrder { get; private set; }
 
 		public IEnumerable<IndexedAttribute> Indices { get; set; }
 
@@ -2994,9 +3029,13 @@ public class TableMapping
 			ColumnType = Nullable.GetUnderlyingType(memberType) ?? memberType;
 			Collation = Orm.Collation(member);
 
-			IsPK = Orm.IsPK(member) ||
-			       (((createFlags & CreateFlags.ImplicitPK) == CreateFlags.ImplicitPK) &&
-			        string.Compare(member.Name, Orm.ImplicitPkName, StringComparison.OrdinalIgnoreCase) == 0);
+			PKOrder = Orm.PKOrder(member);
+
+			var implicitPk = (createFlags & CreateFlags.ImplicitPK) == CreateFlags.ImplicitPK &&
+			                 member.Name.Equals(Orm.ImplicitPkName, StringComparison.OrdinalIgnoreCase);
+
+			if (PKOrder == null && implicitPk)
+				PKOrder = 0;
 
 			var isAuto = Orm.IsAutoInc(member) || (IsPK && ((createFlags & CreateFlags.AutoIncPK) == CreateFlags.AutoIncPK));
 			IsAutoGuid = isAuto && ColumnType == typeof(Guid);
@@ -3004,14 +3043,14 @@ public class TableMapping
 
 			Indices = Orm.GetIndices(member);
 			if (!Indices.Any()
-			    && !IsPK
+			    && IsPK == null
 			    && ((createFlags & CreateFlags.ImplicitIndex) == CreateFlags.ImplicitIndex)
 			    && Name.EndsWith(Orm.ImplicitIndexSuffix, StringComparison.OrdinalIgnoreCase)
 			   )
 			{
 				Indices = new IndexedAttribute[] { new IndexedAttribute() };
 			}
-			IsNullable = !(IsPK || Orm.IsMarkedNotNull(member));
+			IsNullable = !(IsPK != null || Orm.IsMarkedNotNull(member));
 			MaxStringLength = Orm.MaxStringLength(member);
 
 			StoreAsText = memberType.GetTypeInfo().CustomAttributes.Any(x => x.AttributeType == typeof(StoreAsTextAttribute));
@@ -3219,7 +3258,12 @@ public static class Orm
 
 	public static bool IsPK(MemberInfo p)
 	{
-		return p.CustomAttributes.Any(x => x.AttributeType == typeof(PrimaryKeyAttribute));
+		return p.GetCustomAttribute<PrimaryKeyAttribute>() != null;
+	}
+
+	public static int? PKOrder(MemberInfo p)
+	{
+		return p.GetCustomAttribute<PrimaryKeyAttribute>()?.Order;
 	}
 
 	public static string Collation(MemberInfo p)
