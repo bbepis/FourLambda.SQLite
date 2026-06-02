@@ -713,7 +713,6 @@ public partial class SQLiteConnection : ISQLiteConnection
 		// Create or migrate it
 		if (existingCols.Count == 0)
 		{
-
 			// Facilitate virtual tables a.k.a. full-text search.
 			bool fts3 = (createFlags & CreateFlags.FullTextSearch3) != 0;
 			bool fts4 = (createFlags & CreateFlags.FullTextSearch4) != 0;
@@ -730,6 +729,10 @@ public partial class SQLiteConnection : ISQLiteConnection
 			if (map.WithoutRowId)
 			{
 				query += " without rowid";
+			}
+			if (map.Strict)
+			{
+				query += " strict";
 			}
 
 			Execute(query);
@@ -2625,6 +2628,8 @@ public class TableAttribute : Attribute
 	/// </summary>
 	public bool WithoutRowId { get; set; }
 
+	public bool Strict { get; set; }
+
 	public TableAttribute(string name)
 	{
 		Name = name;
@@ -2742,6 +2747,8 @@ public class TableMapping
 
 	public bool WithoutRowId { get; private set; }
 
+	public bool Strict { get; private set; }
+
 	public Column[] Columns { get; private set; }
 
 	public Column[] PrimaryKeyColumns { get; private set; }
@@ -2767,7 +2774,8 @@ public class TableMapping
 		var tableAttr = type.GetCustomAttributes<TableAttribute>().FirstOrDefault();
 
 		TableName = (tableAttr != null && !string.IsNullOrEmpty(tableAttr.Name)) ? tableAttr.Name : MappedType.Name;
-		WithoutRowId = tableAttr != null ? tableAttr.WithoutRowId : false;
+		WithoutRowId = tableAttr?.WithoutRowId ?? false;
+		Strict = tableAttr?.Strict ?? false;
 
 		var members = GetPublicMembers(type);
 		var cols = new List<Column>(members.Count);
