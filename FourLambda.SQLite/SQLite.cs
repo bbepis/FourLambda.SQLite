@@ -125,6 +125,10 @@ public enum CreateFlags
 	/// </summary>
 	AllImplicit = 0x003,
 	/// <summary>
+	/// Creates all columns as nullable unless explicitly marked with <see cref="NotNullAttribute"/> or <see cref="PrimaryKeyAttribute"/>.
+	/// </summary>
+	ImplicitNullable = 0x008,
+	/// <summary>
 	/// Force the primary key property to be auto incrementing.
 	/// This avoids the need for the [AutoIncrement] attribute.
 	/// The primary key property on the class should have type int or long.
@@ -2785,7 +2789,7 @@ public class TableMapping
 		MappedType = type;
 		CreateFlags = createFlags;
 
-		var tableAttr = type.GetCustomAttributes<TableAttribute>().FirstOrDefault();
+		var tableAttr = type.GetCustomAttribute<TableAttribute>();
 
 		TableName = (tableAttr != null && !string.IsNullOrEmpty(tableAttr.Name)) ? tableAttr.Name : MappedType.Name;
 		WithoutRowId = tableAttr?.WithoutRowId ?? false;
@@ -2994,7 +2998,18 @@ public class TableMapping
 			{
 				Indices = new IndexedAttribute[] { new IndexedAttribute() };
 			}
-			IsNullable = !(IsPK != null || Orm.IsMarkedNotNull(member));
+
+			var nullabilityContext = new NullabilityInfoContext();
+			var nullabilityInfo = member is PropertyInfo propertyInfo
+				? nullabilityContext.Create(propertyInfo)
+				: nullabilityContext.Create((FieldInfo)member);
+
+			bool explicitlyNull = Nullable.GetUnderlyingType(memberType) != null || nullabilityInfo.WriteState == NullabilityState.Nullable;
+
+			if (explicitlyNull && IsPK)
+				throw new ArgumentException("A column marked as primary key cannot be nullable.");
+			
+			IsNullable = explicitlyNull || (createFlags.HasFlag(CreateFlags.ImplicitNullable) && !(IsPK || Orm.IsMarkedNotNull(member)));
 			MaxStringLength = Orm.MaxStringLength(member);
 
 			SqliteType = Orm.SqlType(this);
@@ -3162,20 +3177,23 @@ public static class Orm
 
 		if (!compositeKey)
 		{
-		if (p.IsPK)
-		{
-			decl += "primary key ";
-		}
+			if (p.IsPK)
+			{
+				decl += "primary key ";
+			}
 
-		if (p.IsAutoInc)
-		{
-			decl += "autoincrement ";
-		}
+			if (p.IsAutoInc)
+			{
+				decl += "autoincrement ";
+			}
 		}
 
 		if (!p.IsNullable)
 		{
 			decl += "not null ";
+
+			if (p.SqliteType == SqliteCellType.Integer)
+				decl += "default 0 ";
 		}
 		if (!string.IsNullOrEmpty(p.Collation))
 		{
@@ -3627,13 +3645,13 @@ public partial class SQLiteCommand
 				SQLite3.BindDouble(stmt, index, Convert.ToDouble(value));
 			}
 			else if (value is TimeSpan)
-				{
-					SQLite3.BindInt64(stmt, index, ((TimeSpan)value).Ticks);
-				}
+			{
+				SQLite3.BindInt64(stmt, index, ((TimeSpan)value).Ticks);
+			}
 			else if (value is DateTime)
-				{
-					SQLite3.BindInt64(stmt, index, ((DateTime)value).Ticks);
-				}
+			{
+				SQLite3.BindInt64(stmt, index, ((DateTime)value).Ticks);
+			}
 			else if (value is DateTimeOffset)
 			{
 				SQLite3.BindInt64(stmt, index, ((DateTimeOffset)value).UtcTicks);
@@ -3734,7 +3752,7 @@ public partial class SQLiteCommand
 					var text = SQLite3.ColumnString(stmt, index);
 
 					if (column?.StoreAsTextFormat != null && TimeSpan.TryParseExact(text, column.StoreAsTextFormat, CultureInfo.InvariantCulture, TimeSpanStyles.None, out var resultTime))
-					return resultTime;
+						return resultTime;
 
 					if (TimeSpan.TryParseExact(text, "c", CultureInfo.InvariantCulture, TimeSpanStyles.None, out resultTime))
 						return resultTime;
@@ -3928,7 +3946,7 @@ internal class FastColumnSetter
 					if (TimeSpan.TryParseExact(text, "c", CultureInfo.InvariantCulture, TimeSpanStyles.None, out resultTime))
 						return resultTime;
 
-						resultTime = TimeSpan.Parse(text);
+					resultTime = TimeSpan.Parse(text);
 					return resultTime;
 				});
 			}
@@ -4959,7 +4977,7 @@ public class TableQuery<
 	/// Returns the first element of this query that matches the predicate, or null
 	/// if no element is found.
 	/// </summary>
-	public T FirstOrDefault(Expression<Func<T, bool>> predExpr)
+	public T? FirstOrDefault(Expression<Func<T, bool>> predExpr)
 	{
 		return Where(predExpr).FirstOrDefault();
 	}
