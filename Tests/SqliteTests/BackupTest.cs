@@ -4,7 +4,7 @@
 public class BackupTest : DBTestHarness
 {
 	[Test]
-	public void BackupOneTable ()
+	public void BackupOneTable()
 	{
 		var pathDest = GetDisposablePath();
 

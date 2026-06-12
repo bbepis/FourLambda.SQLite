@@ -30,7 +30,7 @@ public class EnumCacheTests
 		Value1 = 1,
 		Value2 = 2,
 		Value2Again = 2,
-		Value3 = 3,
+		Value3 = 3
 	}
 
 	[StoreAsText]
@@ -39,12 +39,11 @@ public class EnumCacheTests
 		Value1 = 1,
 		Value2 = 2,
 		Value2Again = 2,
-		Value3 = 3,
+		Value3 = 3
 	}
 
 	public class TestClassNotEnum
 	{
-
 	}
 
 	[Test]
@@ -58,10 +57,8 @@ public class EnumCacheTests
 
 		var values = Enum.GetValues(typeof(TestEnumStoreAsText)).Cast<object>().ToList();
 
-		for (int i = 0; i < values.Count; i++)
-		{
+		for (var i = 0; i < values.Count; i++)
 			Assert.AreEqual(values[i].ToString(), info.EnumValues[i]);
-		}
 	}
 
 	[Test]
@@ -94,22 +91,22 @@ public class EnumCacheTests
 	}
 
 	[Test]
-	public void Issue598_EnumsWithRepeatedValues ()
+	public void Issue598_EnumsWithRepeatedValues()
 	{
 		var info = EnumCache.GetInfo<TestEnumWithRepeats>();
 
-		Assert.IsTrue (info.IsEnum);
-		Assert.IsFalse (info.StoreAsText);
-		Assert.IsNull (info.EnumValues);
+		Assert.IsTrue(info.IsEnum);
+		Assert.IsFalse(info.StoreAsText);
+		Assert.IsNull(info.EnumValues);
 	}
 
 	[Test]
-	public void Issue598_EnumsWithRepeatedValuesAsText ()
+	public void Issue598_EnumsWithRepeatedValuesAsText()
 	{
 		var info = EnumCache.GetInfo<TestEnumWithRepeatsAsText>();
 
-		Assert.IsTrue (info.IsEnum);
-		Assert.IsTrue (info.StoreAsText);
-		Assert.IsNotNull (info.EnumValues);
+		Assert.IsTrue(info.IsEnum);
+		Assert.IsTrue(info.StoreAsText);
+		Assert.IsNotNull(info.EnumValues);
 	}
 }

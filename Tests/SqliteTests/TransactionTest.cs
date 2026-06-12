@@ -28,7 +28,8 @@ public class TransactionTest : DBTestHarness
 	[Test]
 	public void SuccessfulSavepointTransaction()
 	{
-		Database.RunInTransaction(() => {
+		Database.RunInTransaction(() =>
+		{
 			Database.Delete(testObjects[0]);
 			Database.Delete(testObjects[1]);
 			Database.Insert(new TestObj());
@@ -40,13 +41,17 @@ public class TransactionTest : DBTestHarness
 	[Test]
 	public void FailSavepointTransaction()
 	{
-		try {
-			Database.RunInTransaction(() => {
+		try
+		{
+			Database.RunInTransaction(() =>
+			{
 				Database.Delete(testObjects[0]);
 
 				throw new TransactionTestException();
 			});
-		} catch (TransactionTestException) {
+		}
+		catch (TransactionTestException)
+		{
 			// ignore
 		}
 
@@ -56,12 +61,11 @@ public class TransactionTest : DBTestHarness
 	[Test]
 	public void SuccessfulNestedSavepointTransaction()
 	{
-		Database.RunInTransaction(() => {
+		Database.RunInTransaction(() =>
+		{
 			Database.Delete(testObjects[0]);
 
-			Database.RunInTransaction(() => {
-				Database.Delete(testObjects[1]);
-			});
+			Database.RunInTransaction(() => { Database.Delete(testObjects[1]); });
 		});
 
 		Assert.AreEqual(testObjects.Count - 2, Database.Table<TestObj>().Count());
@@ -70,17 +74,22 @@ public class TransactionTest : DBTestHarness
 	[Test]
 	public void FailNestedSavepointTransaction()
 	{
-		try {
-			Database.RunInTransaction(() => {
+		try
+		{
+			Database.RunInTransaction(() =>
+			{
 				Database.Delete(testObjects[0]);
 
-				Database.RunInTransaction(() => {
+				Database.RunInTransaction(() =>
+				{
 					Database.Delete(testObjects[1]);
 
 					throw new TransactionTestException();
 				});
 			});
-		} catch (TransactionTestException) {
+		}
+		catch (TransactionTestException)
+		{
 			// ignore
 		}
 
@@ -88,9 +97,9 @@ public class TransactionTest : DBTestHarness
 	}
 
 	[Test]
-	public void Issue604_RecoversFromFailedCommit ()
+	public void Issue604_RecoversFromFailedCommit()
 	{
-		var initialCount = Database.Table<TestObj>().Count ();
+		var initialCount = Database.Table<TestObj>().Count();
 
 		//
 		// Well this is an issue because there is an internal variable called _transactionDepth
@@ -100,22 +109,23 @@ public class TransactionTest : DBTestHarness
 		// the COMMIT can be retried later after the reader has had a chance to clear"
 		//
 		var rollbacks = 0;
-		Database.Tracer = m => {
+		Database.Tracer = m =>
+		{
 			if (m == "Executing: commit")
-				throw SQLiteException.New (SQLite3.Result.Busy, "Make commit fail");
+				throw SQLiteException.New(SQLite3.Result.Busy, "Make commit fail");
 			if (m == "Executing: rollback")
 				rollbacks++;
 		};
-		Database.BeginTransaction ();
-		Database.Insert (new TestObj ());
+		Database.BeginTransaction();
+		Database.Insert(new TestObj());
 
 		var ex = Assert.Throws<SQLiteException>(Database.Commit);
 		Assert.AreEqual(SQLite3.Result.Busy, ex.Result);
 
 		Database.Trace = false;
 
-		Assert.False (Database.IsInTransaction);
-		Assert.AreEqual (1, rollbacks);
+		Assert.False(Database.IsInTransaction);
+		Assert.AreEqual(1, rollbacks);
 
 		//
 		// The catch statements in the RunInTransaction family of functions catch this and call rollback,
@@ -129,39 +139,40 @@ public class TransactionTest : DBTestHarness
 		// and when begin transaction fails in this manner, the transaction isn't rolled back
 		// (which would have set _transactionDepth to 0)
 		//
-		Database.BeginTransaction ();
-		Database.Insert (new TestObj ());
-		Database.Commit ();
-		Assert.AreEqual (initialCount + 1, Database.Table<TestObj>().Count ());
+		Database.BeginTransaction();
+		Database.Insert(new TestObj());
+		Database.Commit();
+		Assert.AreEqual(initialCount + 1, Database.Table<TestObj>().Count());
 	}
 
 	[Test]
-	public void Issue604_RecoversFromFailedRelease ()
+	public void Issue604_RecoversFromFailedRelease()
 	{
-		var initialCount = Database.Table<TestObj>().Count ();
+		var initialCount = Database.Table<TestObj>().Count();
 
 		var rollbacks = 0;
-		Database.Tracer = m => {
+		Database.Tracer = m =>
+		{
 			//Console.WriteLine (m);
-			if (m.StartsWith ("Executing: release"))
-				throw SQLiteException.New (SQLite3.Result.Busy, "Make release fail");
+			if (m.StartsWith("Executing: release"))
+				throw SQLiteException.New(SQLite3.Result.Busy, "Make release fail");
 			if (m == "Executing: rollback")
 				rollbacks++;
 		};
-		var sp0 = Database.SaveTransactionPoint ();
-		Database.Insert (new TestObj ());
+		var sp0 = Database.SaveTransactionPoint();
+		Database.Insert(new TestObj());
 
 		var ex = Assert.Throws<SQLiteException>(() => Database.Release(sp0));
 		Assert.AreEqual(SQLite3.Result.Busy, ex.Result);
 
 		Database.Trace = false;
 
-		Assert.False (Database.IsInTransaction);
-		Assert.AreEqual (1, rollbacks);
+		Assert.False(Database.IsInTransaction);
+		Assert.AreEqual(1, rollbacks);
 
-		Database.BeginTransaction ();
-		Database.Insert (new TestObj ());
-		Database.Commit ();
-		Assert.AreEqual (initialCount + 1, Database.Table<TestObj>().Count ());
+		Database.BeginTransaction();
+		Database.Insert(new TestObj());
+		Database.Commit();
+		Assert.AreEqual(initialCount + 1, Database.Table<TestObj>().Count());
 	}
 }

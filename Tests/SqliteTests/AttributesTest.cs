@@ -6,15 +6,15 @@ public class AttributesTest
 	[Test]
 	public void TestCtors()
 	{
-		Assert.DoesNotThrow (() => new CollationAttribute ("NOCASE"));
-		Assert.DoesNotThrow (() => new ColumnAttribute ("Bar"));
-		Assert.DoesNotThrow (() => new IgnoreAttribute ());
-		Assert.DoesNotThrow (() => new IndexedAttribute ());
-		Assert.DoesNotThrow (() => new NotNullAttribute ());
-		Assert.DoesNotThrow (() => new PreserveAttribute ());
-		Assert.DoesNotThrow (() => new PrimaryKeyAttribute ());
-		Assert.DoesNotThrow (() => new StoreAsTextAttribute ());
-		Assert.DoesNotThrow (() => new TableAttribute ("Foo"));
-		Assert.DoesNotThrow (() => new UniqueAttribute ());
+		Assert.DoesNotThrow(() => new CollationAttribute("NOCASE"));
+		Assert.DoesNotThrow(() => new ColumnAttribute("Bar"));
+		Assert.DoesNotThrow(() => new IgnoreAttribute());
+		Assert.DoesNotThrow(() => new IndexedAttribute());
+		Assert.DoesNotThrow(() => new NotNullAttribute());
+		Assert.DoesNotThrow(() => new PreserveAttribute());
+		Assert.DoesNotThrow(() => new PrimaryKeyAttribute());
+		Assert.DoesNotThrow(() => new StoreAsTextAttribute());
+		Assert.DoesNotThrow(() => new TableAttribute("Foo"));
+		Assert.DoesNotThrow(() => new UniqueAttribute());
 	}
 }

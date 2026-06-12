@@ -3,9 +3,9 @@ namespace FourLambda.SQLite.Tests;
 [TestFixture]
 public class DateTimeTest : DBTestHarness
 {
-	const string TestFormat = "yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff";
+	private const string TestFormat = "yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff";
 
-	abstract class BaseDateTimeClass
+	private abstract class BaseDateTimeClass
 	{
 		[PrimaryKey, AutoIncrement]
 		public int Id { get; set; }
@@ -13,24 +13,24 @@ public class DateTimeTest : DBTestHarness
 		public abstract DateTime? ModifiedTime { get; set; }
 	}
 
-	class DateTimeAsTicksClass : BaseDateTimeClass
+	private class DateTimeAsTicksClass : BaseDateTimeClass
 	{
 		public override DateTime? ModifiedTime { get; set; }
 	}
 
-	class DateTimeAsStringClass : BaseDateTimeClass
+	private class DateTimeAsStringClass : BaseDateTimeClass
 	{
 		[StoreAsText]
 		public override DateTime? ModifiedTime { get; set; }
 	}
 
-	class DateTimeAsStringFormattedClass : BaseDateTimeClass
+	private class DateTimeAsStringFormattedClass : BaseDateTimeClass
 	{
 		[StoreAsText(Format = TestFormat)]
 		public override DateTime? ModifiedTime { get; set; }
 	}
 
-	private static readonly DateTime TestDateTime = new DateTime(2012, 1, 14, 3, 2, 1, 234);
+	private static readonly DateTime TestDateTime = new(2012, 1, 14, 3, 2, 1, 234);
 
 	[Test]
 	public void AsTicks()
@@ -49,13 +49,13 @@ public class DateTimeTest : DBTestHarness
 		TestWrite<DateTimeAsStringFormattedClass>(TestDateTime, TestDateTime.ToString(TestFormat));
 	}
 
-	void TestWrite<T>(DateTime dateTime, string expected) where T : BaseDateTimeClass, new()
+	private void TestWrite<T>(DateTime dateTime, string expected) where T : BaseDateTimeClass, new()
 	{
 		Database.CreateTable<T>();
 
 		var o = new T
 		{
-			ModifiedTime = dateTime,
+			ModifiedTime = dateTime
 		};
 		Database.Insert(o);
 		var o2 = Database.Get<T>(o.Id);

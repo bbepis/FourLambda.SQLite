@@ -13,15 +13,15 @@ public class ByteArrayTest : DBTestHarness
 		public void AssertEquals(ByteArrayClass other)
 		{
 			Assert.AreEqual(other.ID, ID);
-			if (other.bytes == null || bytes == null) {
-				Assert.IsNull (other.bytes);
-				Assert.IsNull (bytes);
+			if (other.bytes == null || bytes == null)
+			{
+				Assert.IsNull(other.bytes);
+				Assert.IsNull(bytes);
 			}
-			else {
+			else
+			{
 				Assert.AreEqual(other.bytes.Length, bytes.Length);
-				for (var i = 0; i < bytes.Length; i++) {
-					Assert.AreEqual(other.bytes[i], bytes[i]);
-				}
+				for (var i = 0; i < bytes.Length; i++) Assert.AreEqual(other.bytes[i], bytes[i]);
 			}
 		}
 	}
@@ -48,22 +48,19 @@ public class ByteArrayTest : DBTestHarness
 		];
 
 		//Insert all of the ByteArrayClass
-		foreach (ByteArrayClass b in byteArrays)
+		foreach (var b in byteArrays)
 			Database.Insert(b);
 
 		//Get them back out
-		ByteArrayClass[] fetchedByteArrays = Database.Table<ByteArrayClass>().OrderBy(x => x.ID).ToArray();
+		var fetchedByteArrays = Database.Table<ByteArrayClass>().OrderBy(x => x.ID).ToArray();
 
 		Assert.AreEqual(fetchedByteArrays.Length, byteArrays.Length);
 		//Check they are the same
-		for (int i = 0; i < byteArrays.Length; i++)
-		{
+		for (var i = 0; i < byteArrays.Length; i++)
 			byteArrays[i].AssertEquals(fetchedByteArrays[i]);
-		}
 	}
 
-	[Test]
-	[Description("Uses a byte array to find a record")]
+	[Test, Description("Uses a byte array to find a record")]
 	public void ByteArrayWhere()
 	{
 		//Byte Arrays for comparison
@@ -81,24 +78,24 @@ public class ByteArrayTest : DBTestHarness
 		byte[] criterion = [1, 0, 1];
 
 		//Insert all the ByteArrayClasses
-		int id = 0;
-		foreach (ByteArrayClass b in byteArrays)
+		var id = 0;
+		foreach (var b in byteArrays)
 		{
 			Database.Insert(b);
 			if (b.bytes != null && criterion.SequenceEqual<byte>(b.bytes))
 				id = b.ID;
 		}
+
 		Assert.AreNotEqual(0, id, "An ID wasn't set");
 
 		//Get it back out
-		ByteArrayClass fetchedByteArray = Database.Table<ByteArrayClass>().First(x => x.bytes == criterion);
+		var fetchedByteArray = Database.Table<ByteArrayClass>().First(x => x.bytes == criterion);
 		Assert.IsNotNull(fetchedByteArray);
 		//Check they are the same
 		Assert.AreEqual(id, fetchedByteArray.ID);
 	}
 
-	[Test]
-	[Description("Uses a null byte array to find a record")]
+	[Test, Description("Uses a null byte array to find a record")]
 	public void ByteArrayWhereNull()
 	{
 		//Byte Arrays for comparison
@@ -116,39 +113,39 @@ public class ByteArrayTest : DBTestHarness
 		byte[] criterion = null;
 
 		//Insert all the ByteArrayClasses
-		int id = 0;
-		foreach (ByteArrayClass b in byteArrays)
+		var id = 0;
+		foreach (var b in byteArrays)
 		{
 			Database.Insert(b);
 			if (b.bytes == null)
 				id = b.ID;
 		}
+
 		Assert.AreNotEqual(0, id, "An ID wasn't set");
 
 		//Get it back out
-		ByteArrayClass fetchedByteArray = Database.Table<ByteArrayClass>().First(x => x.bytes == criterion);
+		var fetchedByteArray = Database.Table<ByteArrayClass>().First(x => x.bytes == criterion);
 
 		Assert.IsNotNull(fetchedByteArray);
 		//Check they are the same
 		Assert.AreEqual(id, fetchedByteArray.ID);
 	}
 
-	[Test]
-	[Description("Create a large byte array and check it can be stored and retrieved correctly")]
+	[Test, Description("Create a large byte array and check it can be stored and retrieved correctly")]
 	public void LargeByteArray()
 	{
 		const int byteArraySize = 1024 * 1024;
-		byte[] bytes = new byte[byteArraySize];
-		for (int i = 0; i < byteArraySize; i++)
+		var bytes = new byte[byteArraySize];
+		for (var i = 0; i < byteArraySize; i++)
 			bytes[i] = (byte)(i % 256);
 
-		ByteArrayClass byteArray = new ByteArrayClass() { bytes = bytes };
+		var byteArray = new ByteArrayClass { bytes = bytes };
 
 		//Insert the ByteArrayClass
 		Database.Insert(byteArray);
 
 		//Get it back out
-		ByteArrayClass[] fetchedByteArrays = Database.Table<ByteArrayClass>().ToArray();
+		var fetchedByteArrays = Database.Table<ByteArrayClass>().ToArray();
 
 		Assert.AreEqual(fetchedByteArrays.Length, 1);
 

@@ -7,15 +7,15 @@ public class CollateTest : DBTestHarness
 	{
 		[AutoIncrement, PrimaryKey]
 		public int Id { get; set; }
-			
+
 		public string CollateDefault { get; set; }
-			
+
 		[Collation("BINARY")]
 		public string CollateBinary { get; set; }
-			
+
 		[Collation("RTRIM")]
 		public string CollateRTrim { get; set; }
-			
+
 		[Collation("NOCASE")]
 		public string CollateNoCase { get; set; }
 
@@ -26,34 +26,35 @@ public class CollateTest : DBTestHarness
 	{
 		Database.CreateTable<TestObj>();
 	}
-		
+
 	[Test]
 	public void Collate()
 	{
-		var obj = new TestObj() {
+		var obj = new TestObj
+		{
 			CollateDefault = "Alpha ",
 			CollateBinary = "Alpha ",
 			CollateRTrim = "Alpha ",
-			CollateNoCase = "Alpha ",
+			CollateNoCase = "Alpha "
 		};
-						
-		Database.Insert(obj);			
-			
+
+		Database.Insert(obj);
+
 		Assert.AreEqual(1, (from o in Database.Table<TestObj>() where o.CollateDefault == "Alpha " select o).Count());
 		Assert.AreEqual(0, (from o in Database.Table<TestObj>() where o.CollateDefault == "ALPHA " select o).Count());
 		Assert.AreEqual(0, (from o in Database.Table<TestObj>() where o.CollateDefault == "Alpha" select o).Count());
 		Assert.AreEqual(0, (from o in Database.Table<TestObj>() where o.CollateDefault == "ALPHA" select o).Count());
-			
+
 		Assert.AreEqual(1, (from o in Database.Table<TestObj>() where o.CollateBinary == "Alpha " select o).Count());
 		Assert.AreEqual(0, (from o in Database.Table<TestObj>() where o.CollateBinary == "ALPHA " select o).Count());
 		Assert.AreEqual(0, (from o in Database.Table<TestObj>() where o.CollateBinary == "Alpha" select o).Count());
 		Assert.AreEqual(0, (from o in Database.Table<TestObj>() where o.CollateBinary == "ALPHA" select o).Count());
-			
+
 		Assert.AreEqual(1, (from o in Database.Table<TestObj>() where o.CollateRTrim == "Alpha " select o).Count());
 		Assert.AreEqual(0, (from o in Database.Table<TestObj>() where o.CollateRTrim == "ALPHA " select o).Count());
 		Assert.AreEqual(1, (from o in Database.Table<TestObj>() where o.CollateRTrim == "Alpha" select o).Count());
 		Assert.AreEqual(0, (from o in Database.Table<TestObj>() where o.CollateRTrim == "ALPHA" select o).Count());
-			
+
 		Assert.AreEqual(1, (from o in Database.Table<TestObj>() where o.CollateNoCase == "Alpha " select o).Count());
 		Assert.AreEqual(1, (from o in Database.Table<TestObj>() where o.CollateNoCase == "ALPHA " select o).Count());
 		Assert.AreEqual(0, (from o in Database.Table<TestObj>() where o.CollateNoCase == "Alpha" select o).Count());

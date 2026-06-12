@@ -46,38 +46,40 @@ public class InsertTest : DBTestHarness
 	[Test]
 	public void InsertALot()
 	{
-		int n = 10000;
-		var q =	from i in Enumerable.Range(1, n)
-			select new TestObj() {
+		var n = 10000;
+		var q = from i in Enumerable.Range(1, n)
+			select new TestObj
+			{
 				Text = "I am"
 			};
 		var objs = q.ToArray();
 		Database.Trace = false;
-			
+
 		var sw = new Stopwatch();
 		sw.Start();
-			
+
 		var numIn = Database.InsertAll(objs);
-			
+
 		sw.Stop();
-			
+
 		Assert.AreEqual(numIn, n, "Num inserted must = num objects");
-			
+
 		var inObjs = Database.CreateCommand("select * from TestObj").ExecuteQuery<TestObj>().ToArray();
-			
-		for (var i = 0; i < inObjs.Length; i++) {
-			Assert.AreEqual(i+1, objs[i].Id);
-			Assert.AreEqual(i+1, inObjs[i].Id);
+
+		for (var i = 0; i < inObjs.Length; i++)
+		{
+			Assert.AreEqual(i + 1, objs[i].Id);
+			Assert.AreEqual(i + 1, inObjs[i].Id);
 			Assert.AreEqual("I am", inObjs[i].Text);
 		}
-			
+
 		var numCount = Database.CreateCommand("select count(*) from TestObj").ExecuteScalar<int>();
-			
+
 		Assert.AreEqual(numCount, n, "Num counted must = num objects");
 	}
 
 	[Test]
-	public void InsertTraces ()
+	public void InsertTraces()
 	{
 		var oldTracer = Database.Tracer;
 		var oldTrace = Database.Trace;
@@ -86,11 +88,11 @@ public class InsertTest : DBTestHarness
 		Database.Tracer = traces.Add;
 		Database.Trace = true;
 
-		var obj1 = new TestObj () { Text = "GLaDOS loves tracing!" };
-		var numIn1 = Database.Insert (obj1);
+		var obj1 = new TestObj { Text = "GLaDOS loves tracing!" };
+		var numIn1 = Database.Insert(obj1);
 
-		Assert.AreEqual (1, numIn1);
-		Assert.AreEqual (1, traces.Count);
+		Assert.AreEqual(1, numIn1);
+		Assert.AreEqual(1, traces.Count);
 
 		Database.Tracer = oldTracer;
 		Database.Trace = oldTrace;
@@ -99,8 +101,8 @@ public class InsertTest : DBTestHarness
 	[Test]
 	public void InsertTwoTimes()
 	{
-		var obj1 = new TestObj() { Text = "GLaDOS loves testing!" };
-		var obj2 = new TestObj() { Text = "Keep testing, just keep testing" };
+		var obj1 = new TestObj { Text = "GLaDOS loves testing!" };
+		var obj2 = new TestObj { Text = "Keep testing, just keep testing" };
 
 
 		var numIn1 = Database.Insert(obj1);
@@ -117,8 +119,8 @@ public class InsertTest : DBTestHarness
 	[Test]
 	public void InsertIntoTwoTables()
 	{
-		var obj1 = new TestObj() { Text = "GLaDOS loves testing!" };
-		var obj2 = new TestObj2() { Text = "Keep testing, just keep testing" };
+		var obj1 = new TestObj { Text = "GLaDOS loves testing!" };
+		var obj2 = new TestObj2 { Text = "Keep testing, just keep testing" };
 
 		var numIn1 = Database.Insert(obj1);
 		Assert.AreEqual(1, numIn1);
@@ -136,9 +138,9 @@ public class InsertTest : DBTestHarness
 	[Test]
 	public void InsertWithExtra()
 	{
-		var obj1 = new TestObj2() { Id=1, Text = "GLaDOS loves testing!" };
-		var obj2 = new TestObj2() { Id=1, Text = "Keep testing, just keep testing" };
-		var obj3 = new TestObj2() { Id=1, Text = "Done testing" };
+		var obj1 = new TestObj2 { Id = 1, Text = "GLaDOS loves testing!" };
+		var obj2 = new TestObj2 { Id = 1, Text = "Keep testing, just keep testing" };
+		var obj3 = new TestObj2 { Id = 1, Text = "Done testing" };
 
 		Database.Insert(obj1);
 
@@ -192,7 +194,8 @@ public class InsertTest : DBTestHarness
 	{
 		var testObjects = Enumerable.Range(1, 20).Select(i => new UniqueObj { Id = i }).ToList();
 
-		Database.RunInTransaction(() => {
+		Database.RunInTransaction(() =>
+		{
 			Database.InsertAll(testObjects);
 		});
 
@@ -205,25 +208,29 @@ public class InsertTest : DBTestHarness
 		var testObjects = Enumerable.Range(1, 20).Select(i => new UniqueObj { Id = i }).ToList();
 		testObjects[testObjects.Count - 1].Id = 1; // causes the insert to fail because of duplicate key
 
-		Assert.Throws<SQLiteException>(() => Database.RunInTransaction(() => {
-			Database.InsertAll(testObjects);
-		}));
+		Assert.Throws<SQLiteException>(() =>
+		{
+			Database.RunInTransaction(() =>
+			{
+				Database.InsertAll(testObjects);
+			});
+		});
 
 		Assert.AreEqual(0, Database.Table<UniqueObj>().Count());
 	}
 
 	[Test]
-	public void InsertOrReplace ()
+	public void InsertOrReplace()
 	{
-		Database.InsertAll (from i in Enumerable.Range(1, 20) select new TestObj { Text = "#" + i });
+		Database.InsertAll(from i in Enumerable.Range(1, 20) select new TestObj { Text = "#" + i });
 
-		Assert.AreEqual (20, Database.Table<TestObj>().Count ());
+		Assert.AreEqual(20, Database.Table<TestObj>().Count());
 
-		var t = new TestObj { Id = 5, Text = "Foo", };
-		Database.InsertOrReplace (t);
+		var t = new TestObj { Id = 5, Text = "Foo" };
+		Database.InsertOrReplace(t);
 
-		var r = (from x in Database.Table<TestObj>() orderby x.Id select x).ToList ();
-		Assert.AreEqual (20, r.Count);
-		Assert.AreEqual ("Foo", r[4].Text);
+		var r = (from x in Database.Table<TestObj>() orderby x.Id select x).ToList();
+		Assert.AreEqual(20, r.Count);
+		Assert.AreEqual("Foo", r[4].Text);
 	}
 }

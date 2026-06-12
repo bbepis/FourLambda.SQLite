@@ -14,7 +14,7 @@ public class IgnoreTest : DBTestHarness
 
 		[Ignore]
 		public Dictionary<int, string> Edibles
-		{ 
+		{
 			get => _edibles;
 			set => _edibles = value;
 		}
@@ -44,32 +44,34 @@ public class IgnoreTest : DBTestHarness
 	{
 		Database.CreateTable<TestObj>();
 
-		var o = new TestObj {
+		var o = new TestObj
+		{
 			Text = "Hello",
-			IgnoredText = "World",
+			IgnoredText = "World"
 		};
 
-		Database.Insert (o);
+		Database.Insert(o);
 
-		Assert.AreEqual (1, o.Id);
+		Assert.AreEqual(1, o.Id);
 	}
 
 	[Test]
-	public void GetDoesNotRetrieveIgnoredProperties ()
+	public void GetDoesNotRetrieveIgnoredProperties()
 	{
 		Database.CreateTable<TestObj>();
 
-		var o = new TestObj {
+		var o = new TestObj
+		{
 			Text = "Hello",
-			IgnoredText = "World",
+			IgnoredText = "World"
 		};
 
-		Database.Insert (o);
+		Database.Insert(o);
 
 		var oo = Database.Get<TestObj>(o.Id);
 
-		Assert.AreEqual ("Hello", oo.Text);
-		Assert.AreEqual (null, oo.IgnoredText);
+		Assert.AreEqual("Hello", oo.Text);
+		Assert.AreEqual(null, oo.IgnoredText);
 	}
 
 	public class BaseClass
@@ -88,9 +90,10 @@ public class IgnoreTest : DBTestHarness
 	{
 		Database.CreateTable<TableClass>();
 
-		var o = new TableClass {
+		var o = new TableClass
+		{
 			ToIgnore = "Hello",
-			Name = "World",
+			Name = "World"
 		};
 
 		Database.Insert(o);
@@ -111,35 +114,35 @@ public class IgnoreTest : DBTestHarness
 	{
 		[Ignore]
 		public new List<string> Values { get; set; }
+
 		public string Value { get; set; }
 	}
 
 	[Test]
-	public void RedefinedIgnores ()
+	public void RedefinedIgnores()
 	{
 		Database.CreateTable<RedefinedClass>();
 
-		var o = new RedefinedClass {
+		var o = new RedefinedClass
+		{
 			Name = "Foo",
 			Value = "Bar",
-			Values = new List<string> { "hello", "world" },
+			Values = new List<string> { "hello", "world" }
 		};
 
 		Database.Insert(o);
 
 		var oo = Database.Table<RedefinedClass>().First();
 
-		Assert.AreEqual ("Foo", oo.Name);
-		Assert.AreEqual ("Bar", oo.Value);
-		Assert.AreEqual (null, oo.Values);
+		Assert.AreEqual("Foo", oo.Name);
+		Assert.AreEqual("Bar", oo.Value);
+		Assert.AreEqual(null, oo.Values);
 	}
 
-	[AttributeUsage (AttributeTargets.Property, AllowMultiple = false, Inherited = true)]
-	class DerivedIgnoreAttribute : IgnoreAttribute
-	{
-	}
+	[AttributeUsage(AttributeTargets.Property, AllowMultiple = false, Inherited = true)]
+	private class DerivedIgnoreAttribute : IgnoreAttribute;
 
-	class DerivedIgnoreClass
+	private class DerivedIgnoreClass
 	{
 		[PrimaryKey, AutoIncrement]
 		public int Id { get; set; }
@@ -151,20 +154,21 @@ public class IgnoreTest : DBTestHarness
 	}
 
 	[Test]
-	public void DerivedIgnore ()
+	public void DerivedIgnore()
 	{
 		Database.CreateTable<DerivedIgnoreClass>();
 
-		var o = new DerivedIgnoreClass {
+		var o = new DerivedIgnoreClass
+		{
 			Ignored = "Hello",
-			NotIgnored = "World",
+			NotIgnored = "World"
 		};
 
-		Database.Insert (o);
+		Database.Insert(o);
 
-		var oo = Database.Table<DerivedIgnoreClass>().First ();
+		var oo = Database.Table<DerivedIgnoreClass>().First();
 
-		Assert.AreEqual (null, oo.Ignored);
-		Assert.AreEqual ("World", oo.NotIgnored);
+		Assert.AreEqual(null, oo.Ignored);
+		Assert.AreEqual("World", oo.NotIgnored);
 	}
 }

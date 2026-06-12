@@ -14,6 +14,7 @@ public class EnumNullableTests : DBTestHarness
 	{
 		[PrimaryKey]
 		public int Id { get; set; }
+
 		public TestEnum? Value { get; set; }
 
 		public override string ToString() => $"[TestObj: Id={Id}, Value={Value}]";
@@ -24,8 +25,8 @@ public class EnumNullableTests : DBTestHarness
 	{
 		Database.CreateTable<TestObj>();
 
-		var obj1 = new TestObj() { Id = 1, Value = TestEnum.Value2 };
-		var obj2 = new TestObj() { Id = 2, Value = TestEnum.Value3 };
+		var obj1 = new TestObj { Id = 1, Value = TestEnum.Value2 };
+		var obj2 = new TestObj { Id = 2, Value = TestEnum.Value3 };
 
 		var numIn1 = Database.Insert(obj1);
 		var numIn2 = Database.Insert(obj2);

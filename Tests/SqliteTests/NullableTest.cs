@@ -12,31 +12,30 @@ public class NullableTest : DBTestHarness
 
 		public override bool Equals(object obj)
 		{
-			NullableIntClass other = (NullableIntClass)obj;
+			var other = (NullableIntClass)obj;
 			return ID == other.ID && NullableInt == other.NullableInt;
 		}
-			
+
 		public override int GetHashCode () => HashCode.Combine(ID, NullableInt);
 	}
 
-	[Test]
-	[Description("Create a table with a nullable int column then insert and select against it")]
+	[Test, Description("Create a table with a nullable int column then insert and select against it")]
 	public void NullableInt()
 	{
 		Database.CreateTable<NullableIntClass>();
 
-		NullableIntClass withNull = new NullableIntClass() { NullableInt = null };
-		NullableIntClass with0 = new NullableIntClass() { NullableInt = 0 };
-		NullableIntClass with1 = new NullableIntClass() { NullableInt = 1 };
-		NullableIntClass withMinus1 = new NullableIntClass() { NullableInt = -1 };
+		var withNull = new NullableIntClass { NullableInt = null };
+		var with0 = new NullableIntClass { NullableInt = 0 };
+		var with1 = new NullableIntClass { NullableInt = 1 };
+		var withMinus1 = new NullableIntClass { NullableInt = -1 };
 
 		Database.Insert(withNull);
 		Database.Insert(with0);
 		Database.Insert(with1);
 		Database.Insert(withMinus1);
 
-		NullableIntClass[] results = Database.Table<NullableIntClass>().OrderBy(x => x.ID).ToArray();
-			
+		var results = Database.Table<NullableIntClass>().OrderBy(x => x.ID).ToArray();
+
 		Assert.AreEqual(4, results.Length);
 
 		Assert.AreEqual(withNull, results[0]);
@@ -55,30 +54,29 @@ public class NullableTest : DBTestHarness
 
 		public override bool Equals(object obj)
 		{
-			NullableFloatClass other = (NullableFloatClass)obj;
+			var other = (NullableFloatClass)obj;
 			return ID == other.ID && NullableFloat == other.NullableFloat;
 		}
 
 		public override int GetHashCode() => HashCode.Combine(ID, NullableFloat);
 	}
 
-	[Test]
-	[Description("Create a table with a nullable int column then insert and select against it")]
+	[Test, Description("Create a table with a nullable int column then insert and select against it")]
 	public void NullableFloat()
 	{
 		Database.CreateTable<NullableFloatClass>();
 
-		NullableFloatClass withNull = new NullableFloatClass() { NullableFloat = null };
-		NullableFloatClass with0 = new NullableFloatClass() { NullableFloat = 0 };
-		NullableFloatClass with1 = new NullableFloatClass() { NullableFloat = 1 };
-		NullableFloatClass withMinus1 = new NullableFloatClass() { NullableFloat = -1 };
+		var withNull = new NullableFloatClass { NullableFloat = null };
+		var with0 = new NullableFloatClass { NullableFloat = 0 };
+		var with1 = new NullableFloatClass { NullableFloat = 1 };
+		var withMinus1 = new NullableFloatClass { NullableFloat = -1 };
 
 		Database.Insert(withNull);
 		Database.Insert(with0);
 		Database.Insert(with1);
 		Database.Insert(withMinus1);
 
-		NullableFloatClass[] results = Database.Table<NullableFloatClass>().OrderBy(x => x.ID).ToArray();
+		var results = Database.Table<NullableFloatClass>().OrderBy(x => x.ID).ToArray();
 
 		Assert.AreEqual(4, results.Length);
 
@@ -87,7 +85,6 @@ public class NullableTest : DBTestHarness
 		Assert.AreEqual(with1, results[2]);
 		Assert.AreEqual(withMinus1, results[3]);
 	}
-
 
 
 	public class StringClass
@@ -100,7 +97,7 @@ public class NullableTest : DBTestHarness
 
 		public override bool Equals(object obj)
 		{
-			StringClass other = (StringClass)obj;
+			var other = (StringClass)obj;
 			return ID == other.ID && StringData == other.StringData;
 		}
 
@@ -112,15 +109,15 @@ public class NullableTest : DBTestHarness
 	{
 		Database.CreateTable<StringClass>();
 
-		StringClass withNull = new StringClass() { StringData = null };
-		StringClass withEmpty = new StringClass() { StringData = "" };
-		StringClass withData = new StringClass() { StringData = "data" };
+		var withNull = new StringClass { StringData = null };
+		var withEmpty = new StringClass { StringData = "" };
+		var withData = new StringClass { StringData = "data" };
 
 		Database.Insert(withNull);
 		Database.Insert(withEmpty);
 		Database.Insert(withData);
 
-		StringClass[] results = Database.Table<StringClass>().OrderBy(x => x.ID).ToArray();
+		var results = Database.Table<StringClass>().OrderBy(x => x.ID).ToArray();
 
 		Assert.AreEqual(3, results.Length);
 
@@ -134,17 +131,17 @@ public class NullableTest : DBTestHarness
 	{
 		Database.CreateTable<NullableIntClass>();
 
-		NullableIntClass withNull = new NullableIntClass() { NullableInt = null };
-		NullableIntClass with0 = new NullableIntClass() { NullableInt = 0 };
-		NullableIntClass with1 = new NullableIntClass() { NullableInt = 1 };
-		NullableIntClass withMinus1 = new NullableIntClass() { NullableInt = -1 };
+		var withNull = new NullableIntClass { NullableInt = null };
+		var with0 = new NullableIntClass { NullableInt = 0 };
+		var with1 = new NullableIntClass { NullableInt = 1 };
+		var withMinus1 = new NullableIntClass { NullableInt = -1 };
 
 		Database.Insert(withNull);
 		Database.Insert(with0);
 		Database.Insert(with1);
 		Database.Insert(withMinus1);
 
-		NullableIntClass[] results = Database.Table<NullableIntClass>().Where(x => x.NullableInt != null).OrderBy(x => x.ID).ToArray();
+		var results = Database.Table<NullableIntClass>().Where(x => x.NullableInt != null).OrderBy(x => x.ID).ToArray();
 
 		Assert.AreEqual(3, results.Length);
 
@@ -158,17 +155,17 @@ public class NullableTest : DBTestHarness
 	{
 		Database.CreateTable<NullableIntClass>();
 
-		NullableIntClass withNull = new NullableIntClass() { NullableInt = null };
-		NullableIntClass with0 = new NullableIntClass() { NullableInt = 0 };
-		NullableIntClass with1 = new NullableIntClass() { NullableInt = 1 };
-		NullableIntClass withMinus1 = new NullableIntClass() { NullableInt = -1 };
+		var withNull = new NullableIntClass { NullableInt = null };
+		var with0 = new NullableIntClass { NullableInt = 0 };
+		var with1 = new NullableIntClass { NullableInt = 1 };
+		var withMinus1 = new NullableIntClass { NullableInt = -1 };
 
 		Database.Insert(withNull);
 		Database.Insert(with0);
 		Database.Insert(with1);
 		Database.Insert(withMinus1);
 
-		NullableIntClass[] results = Database.Table<NullableIntClass>().Where(x => x.NullableInt == null).OrderBy(x => x.ID).ToArray();
+		var results = Database.Table<NullableIntClass>().Where(x => x.NullableInt == null).OrderBy(x => x.ID).ToArray();
 
 		Assert.AreEqual(1, results.Length);
 		Assert.AreEqual(withNull, results[0]);
@@ -179,15 +176,15 @@ public class NullableTest : DBTestHarness
 	{
 		Database.CreateTable<StringClass>();
 
-		StringClass withNull = new StringClass() { StringData = null };
-		StringClass withEmpty = new StringClass() { StringData = "" };
-		StringClass withData = new StringClass() { StringData = "data" };
+		var withNull = new StringClass { StringData = null };
+		var withEmpty = new StringClass { StringData = "" };
+		var withData = new StringClass { StringData = "data" };
 
 		Database.Insert(withNull);
 		Database.Insert(withEmpty);
 		Database.Insert(withData);
 
-		StringClass[] results = Database.Table<StringClass>().Where(x => x.StringData == null).OrderBy(x => x.ID).ToArray();
+		var results = Database.Table<StringClass>().Where(x => x.StringData == null).OrderBy(x => x.ID).ToArray();
 		Assert.AreEqual(1, results.Length);
 		Assert.AreEqual(withNull, results[0]);
 	}
@@ -197,15 +194,15 @@ public class NullableTest : DBTestHarness
 	{
 		Database.CreateTable<StringClass>();
 
-		StringClass withNull = new StringClass() { StringData = null };
-		StringClass withEmpty = new StringClass() { StringData = "" };
-		StringClass withData = new StringClass() { StringData = "data" };
+		var withNull = new StringClass { StringData = null };
+		var withEmpty = new StringClass { StringData = "" };
+		var withData = new StringClass { StringData = "data" };
 
 		Database.Insert(withNull);
 		Database.Insert(withEmpty);
 		Database.Insert(withData);
 
-		StringClass[] results = Database.Table<StringClass>().Where(x => x.StringData != null).OrderBy(x => x.ID).ToArray();
+		var results = Database.Table<StringClass>().Where(x => x.StringData != null).OrderBy(x => x.ID).ToArray();
 		Assert.AreEqual(2, results.Length);
 		Assert.AreEqual(withEmpty, results[0]);
 		Assert.AreEqual(withData, results[1]);
@@ -214,14 +211,14 @@ public class NullableTest : DBTestHarness
 	public enum TestIntEnum
 	{
 		One = 1,
-		Two = 2,
+		Two = 2
 	}
 
 	[StoreAsText]
 	public enum TestTextEnum
 	{
 		Alpha,
-		Beta,
+		Beta
 	}
 
 	public class NullableEnumClass
@@ -232,21 +229,21 @@ public class NullableTest : DBTestHarness
 		public TestIntEnum? NullableIntEnum { get; set; }
 		public TestTextEnum? NullableTextEnum { get; set; }
 
-		public override bool Equals (object obj)
+		public override bool Equals(object obj)
 		{
 			var other = (NullableEnumClass)obj;
-			return ID == other.ID && NullableIntEnum == other.NullableIntEnum && NullableTextEnum == other.NullableTextEnum;
+			return ID == other.ID && NullableIntEnum == other.NullableIntEnum &&
+			       NullableTextEnum == other.NullableTextEnum;
 		}
 
 		public override int GetHashCode() => HashCode.Combine(ID, NullableIntEnum, NullableTextEnum);
 
-		public override string ToString ()
+		public override string ToString()
 			=> $"[NullableEnumClass: ID={ID}, NullableIntEnum={NullableIntEnum}, NullableTextEnum={NullableTextEnum}]";
 	}
 
-	[Test]
-	[Description ("Create a table with a nullable enum column then insert and select against it")]
-	public void NullableEnum ()
+	[Test, Description("Create a table with a nullable enum column then insert and select against it")]
+	public void NullableEnum()
 	{
 		Database.CreateTable<NullableEnumClass>();
 
@@ -256,20 +253,20 @@ public class NullableTest : DBTestHarness
 		var withNullA = new NullableEnumClass { NullableIntEnum = null, NullableTextEnum = TestTextEnum.Alpha };
 		var with1B = new NullableEnumClass { NullableIntEnum = TestIntEnum.One, NullableTextEnum = TestTextEnum.Beta };
 
-		Database.Insert (withNull);
-		Database.Insert (with1);
-		Database.Insert (with2);
-		Database.Insert (withNullA);
-		Database.Insert (with1B);
+		Database.Insert(withNull);
+		Database.Insert(with1);
+		Database.Insert(with2);
+		Database.Insert(withNullA);
+		Database.Insert(with1B);
 
-		var results = Database.Table<NullableEnumClass>().OrderBy (x => x.ID).ToArray ();
+		var results = Database.Table<NullableEnumClass>().OrderBy(x => x.ID).ToArray();
 
-		Assert.AreEqual (5, results.Length);
+		Assert.AreEqual(5, results.Length);
 
-		Assert.AreEqual (withNull, results[0]);
-		Assert.AreEqual (with1, results[1]);
-		Assert.AreEqual (with2, results[2]);
-		Assert.AreEqual (withNullA, results[3]);
-		Assert.AreEqual (with1B, results[4]);
+		Assert.AreEqual(withNull, results[0]);
+		Assert.AreEqual(with1, results[1]);
+		Assert.AreEqual(with2, results[2]);
+		Assert.AreEqual(withNullA, results[3]);
+		Assert.AreEqual(with1B, results[4]);
 	}
 }

@@ -3,27 +3,27 @@ namespace FourLambda.SQLite.Tests;
 [TestFixture]
 public class CreateTableTest : DBTestHarness
 {
-	class NoPropObject { }
+	private class NoPropObject { }
 
 	[Test]
-	public void CreateTypeWithNoProps ()
+	public void CreateTypeWithNoProps()
 	{
 		Assert.Throws<Exception>(() => Database.CreateTable<NoPropObject>());
 	}
 
 	[Test]
-	public void CreateThem ()
+	public void CreateThem()
 	{
 		Database.CreateTable<Product>();
 		Database.CreateTable<Order>();
 		Database.CreateTable<OrderLine>();
 		Database.CreateTable<OrderHistory>();
-			
+
 		VerifyCreations();
 	}
 
 	[Test]
-	public void CreateAsPassedInTypes ()
+	public void CreateAsPassedInTypes()
 	{
 		Database.CreateTable(typeof(Product));
 		Database.CreateTable(typeof(Order));
@@ -34,23 +34,23 @@ public class CreateTableTest : DBTestHarness
 	}
 
 	[Test]
-	public void CreateTwice ()
+	public void CreateTwice()
 	{
 		Database.CreateTable<Product>();
 		Database.CreateTable<OrderLine>();
 		Database.CreateTable<Order>();
 		Database.CreateTable<OrderLine>();
 		Database.CreateTable<OrderHistory>();
-			
+
 		VerifyCreations();
 	}
-        
+
 	private void VerifyCreations()
 	{
 		var orderLine = Database.GetMapping(typeof(OrderLine));
 		Assert.AreEqual(6, orderLine.Columns.Length);
 
-		var l = new OrderLine()
+		var l = new OrderLine
 		{
 			Status = OrderLineStatus.Shipped
 		};
@@ -59,65 +59,70 @@ public class CreateTableTest : DBTestHarness
 		Assert.AreEqual(lo.Id, l.Id);
 	}
 
-	class Issue115_MyObject
+	private class Issue115_MyObject
 	{
 		[PrimaryKey]
 		public string UniqueId { get; set; }
+
 		public byte OtherValue { get; set; }
 	}
 
 	[Test]
-	public void Issue115_MissingPrimaryKey ()
+	public void Issue115_MissingPrimaryKey()
 	{
 		Database.CreateTable<Issue115_MyObject>();
-		Database.InsertAll (from i in Enumerable.Range (0, 10) select new Issue115_MyObject {
-			UniqueId = i.ToString (),
-			OtherValue = (byte)(i * 10),
-		});
+		Database.InsertAll(Enumerable.Range(0, 10)
+			.Select(i => new Issue115_MyObject
+			{
+				UniqueId = i.ToString(),
+				OtherValue = (byte)(i * 10)
+			}));
 
 		var query = Database.Table<Issue115_MyObject>();
-		foreach (var itm in query) {
+		foreach (var itm in query)
+		{
 			itm.OtherValue++;
-			Assert.AreEqual (1, Database.Update (itm, typeof(Issue115_MyObject)));
+			Assert.AreEqual(1, Database.Update(itm, typeof(Issue115_MyObject)));
 		}
 	}
 
 	[Table("WantsNoRowId", WithoutRowId = true)]
-	class WantsNoRowId
+	private class WantsNoRowId
 	{
 		[PrimaryKey]
 		public int Id { get; set; }
+
 		public string Name { get; set; }
 	}
 
 	[Table("sqlite_master")]
-	class SqliteMaster
+	private class SqliteMaster
 	{
-		[Column ("type")]
+		[Column("type")]
 		public string Type { get; set; }
 
-		[Column ("name")]
+		[Column("name")]
 		public string Name { get; set; }
 
-		[Column ("tbl_name")]
+		[Column("tbl_name")]
 		public string TableName { get; set; }
 
-		[Column ("rootpage")]
+		[Column("rootpage")]
 		public int RootPage { get; set; }
 
-		[Column ("sql")]
+		[Column("sql")]
 		public string Sql { get; set; }
 	}
 
 	[Test]
-	public void WithoutRowId ()
+	public void WithoutRowId()
 	{
 		Database.CreateTable<OrderLine>();
-		var info = Database.Table<SqliteMaster>().First(m => m.TableName=="OrderLine");
-		Assert.That (!info.Sql.Contains("without rowid"));
+		var info = Database.Table<SqliteMaster>().First(m => m.TableName == "OrderLine");
+		Assert.That(!info.Sql.Contains("without rowid"));
 
 		Database.CreateTable<WantsNoRowId>();
-		info = Database.Table<SqliteMaster>().First(m => m.TableName=="WantsNoRowId");
-		Assert.That (info.Sql.Contains("without rowid"));
+		info = Database.Table<SqliteMaster>().First(m => m.TableName == "WantsNoRowId");
+		Assert.That(info.Sql.Contains("without rowid"));
 	}
 }

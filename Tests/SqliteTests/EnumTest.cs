@@ -22,6 +22,7 @@ public class EnumTests : DBTestHarness
 	{
 		[PrimaryKey]
 		public int Id { get; set; }
+
 		public TestEnum Value { get; set; }
 
 		public override string ToString() => $"[TestObj: Id={Id}, Value={Value}]";
@@ -31,6 +32,7 @@ public class EnumTests : DBTestHarness
 	{
 		[PrimaryKey]
 		public int Id { get; set; }
+
 		public StringTestEnum Value { get; set; }
 
 		public override string ToString() => $"[StringTestObj: Id={Id}, Value={Value}]";
@@ -46,8 +48,8 @@ public class EnumTests : DBTestHarness
 	[Test]
 	public void ShouldPersistAndReadEnum()
 	{
-		var obj1 = new TestObj() { Id = 1, Value = TestEnum.Value2 };
-		var obj2 = new TestObj() { Id = 2, Value = TestEnum.Value3 };
+		var obj1 = new TestObj { Id = 1, Value = TestEnum.Value2 };
+		var obj2 = new TestObj { Id = 2, Value = TestEnum.Value3 };
 
 		var numIn1 = Database.Insert(obj1);
 		var numIn2 = Database.Insert(obj2);
@@ -64,10 +66,10 @@ public class EnumTests : DBTestHarness
 	}
 
 	[Test]
-	public void ShouldPersistAndReadStringEnum ()
+	public void ShouldPersistAndReadStringEnum()
 	{
-		var obj1 = new StringTestObj() { Id = 1, Value = StringTestEnum.Value2 };
-		var obj2 = new StringTestObj() { Id = 2, Value = StringTestEnum.Value3 };
+		var obj1 = new StringTestObj { Id = 1, Value = StringTestEnum.Value2 };
+		var obj2 = new StringTestObj { Id = 2, Value = StringTestEnum.Value3 };
 
 		var numIn1 = Database.Insert(obj1);
 		var numIn2 = Database.Insert(obj2);
@@ -94,28 +96,29 @@ public class EnumTests : DBTestHarness
 	{
 		[PrimaryKey]
 		public int Id { get; set; }
+
 		public ByteTestEnum Value { get; set; }
 
 		public override string ToString () => $"[ByteTestObj: Id={Id}, Value={Value}]";
 	}
 
 	[Test]
-	public void Issue33_ShouldPersistAndReadByteEnum ()
+	public void Issue33_ShouldPersistAndReadByteEnum()
 	{
-		var obj1 = new ByteTestObj () { Id = 1, Value = ByteTestEnum.Value2 };
-		var obj2 = new ByteTestObj () { Id = 2, Value = ByteTestEnum.Value3 };
+		var obj1 = new ByteTestObj { Id = 1, Value = ByteTestEnum.Value2 };
+		var obj2 = new ByteTestObj { Id = 2, Value = ByteTestEnum.Value3 };
 
-		var numIn1 = Database.Insert (obj1);
-		var numIn2 = Database.Insert (obj2);
-		Assert.AreEqual (1, numIn1);
-		Assert.AreEqual (1, numIn2);
+		var numIn1 = Database.Insert(obj1);
+		var numIn2 = Database.Insert(obj2);
+		Assert.AreEqual(1, numIn1);
+		Assert.AreEqual(1, numIn2);
 
-		var result = Database.Query<ByteTestObj>("select * from ByteTestObj order by Id").ToList ();
-		Assert.AreEqual (2, result.Count);
-		Assert.AreEqual (obj1.Value, result[0].Value);
-		Assert.AreEqual (obj2.Value, result[1].Value);
+		var result = Database.Query<ByteTestObj>("select * from ByteTestObj order by Id").ToList();
+		Assert.AreEqual(2, result.Count);
+		Assert.AreEqual(obj1.Value, result[0].Value);
+		Assert.AreEqual(obj2.Value, result[1].Value);
 
-		Assert.AreEqual (obj1.Id, result[0].Id);
-		Assert.AreEqual (obj2.Id, result[1].Id);
+		Assert.AreEqual(obj1.Id, result[0].Id);
+		Assert.AreEqual(obj2.Id, result[1].Id);
 	}
 }

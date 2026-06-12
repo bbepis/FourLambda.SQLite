@@ -7,62 +7,84 @@ public class ContainsTest : DBTestHarness
 	{
 		[AutoIncrement, PrimaryKey]
 		public int Id { get; set; }
-			
+
 		public string Name { get; set; }
-			
-		public override string ToString()
-			=> $"[TestObj: Id={Id}, Name={Name}]";
+
+		public override string ToString() => $"[TestObj: Id={Id}, Name={Name}]";
 	}
 
 	protected override void InitializeDatabase()
 	{
 		Database.CreateTable<TestObj>();
 	}
-		
+
 	[Test]
 	public void ContainsConstantData()
 	{
-		int n = 20;
-		var cq =from i in Enumerable.Range(1, n)
-			select new TestObj() {
+		var n = 20;
+		var cq = from i in Enumerable.Range(1, n)
+			select new TestObj
+			{
 				Name = i.ToString()
 			};
 
 		Database.InsertAll(cq);
-			
-		var tensq = new string[] { "0", "10", "20" };			
-		var tens = (from o in Database.Table<TestObj>() where tensq.Contains(o.Name) select o).ToList();
+
+		var tensq = new string[] { "0", "10", "20" };
+
+		var tens = Database.Table<TestObj>()
+			.Where(o => tensq.Contains(o.Name))
+			.ToList();
+
 		Assert.AreEqual(2, tens.Count);
-			
-		var moreq = new string[] { "0", "x", "99", "10", "20", "234324" };			
-		var more = (from o in Database.Table<TestObj>() where moreq.Contains(o.Name) select o).ToList();
+
+
+		var moreq = new string[] { "0", "x", "99", "10", "20", "234324" };
+
+		var more = Database.Table<TestObj>()
+			.Where(o => moreq.Contains(o.Name))
+			.ToList();
+
 		Assert.AreEqual(2, more.Count);
 	}
-		
+
 	[Test]
 	public void ContainsQueriedData()
 	{
-		int n = 20;
-		var cq =from i in Enumerable.Range(1, n)
-			select new TestObj() {
+		var n = 20;
+		var cq = from i in Enumerable.Range(1, n)
+			select new TestObj
+			{
 				Name = i.ToString()
 			};
 
 		Database.InsertAll(cq);
 
 		Database.Trace = true;
-			
-		var tensq = new string[] { "0", "10", "20" };			
-		var tens = (from o in Database.Table<TestObj>() where tensq.Contains(o.Name) select o).ToList();
+
+		var tensq = new string[] { "0", "10", "20" };
+
+		var tens = Database.Table<TestObj>()
+			.Where(o => tensq.Contains(o.Name))
+			.ToList();
+
 		Assert.AreEqual(2, tens.Count);
-			
-		var moreq = new string[] { "0", "x", "99", "10", "20", "234324" };			
-		var more = (from o in Database.Table<TestObj>() where moreq.Contains(o.Name) select o).ToList();
+
+		var moreq = new string[] { "0", "x", "99", "10", "20", "234324" };
+
+		var more = Database.Table<TestObj>()
+			.Where(o => moreq.Contains(o.Name))
+			.ToList();
+
 		Assert.AreEqual(2, more.Count);
-			
+
 		// https://github.com/praeclarum/sqlite-net/issues/28
-		var moreq2 = moreq.ToList ();
-		var more2 = (from o in Database.Table<TestObj>() where moreq2.Contains(o.Name) select o).ToList();
-		Assert.AreEqual(2, more2.Count);			
+		var moreq2 = moreq.ToList();
+
+		var more2 = Database.Table<TestObj>()
+			.Where(o => moreq2.Contains(o.Name))
+			.ToList();
+
+		Assert.AreEqual(2, more2.Count);
 	}
 }

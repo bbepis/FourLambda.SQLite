@@ -3,42 +3,44 @@ namespace FourLambda.SQLite.Tests;
 [TestFixture]
 public class CreateTableImplicitTest : DBTestHarness
 {
-	class NoAttributes
+	private class NoAttributes
 	{
 		public int Id { get; set; }
 		public string AColumn { get; set; }
 		public int IndexedId { get; set; }
 	}
 
-	class NoAttributesNoOptions
+	private class NoAttributesNoOptions
 	{
 		public int Id { get; set; }
 		public string AColumn { get; set; }
 		public int IndexedId { get; set; }
 	}
 
-	class PkAttribute
+	private class PkAttribute
 	{
 		[PrimaryKey]
 		public int Id { get; set; }
+
 		public string AColumn { get; set; }
 		public int IndexedId { get; set; }
 	}
 
 	private void CheckPK()
 	{
-		for (int i = 1; i <= 10; i++)
+		for (var i = 1; i <= 10; i++)
 		{
 			var na = new NoAttributes { Id = i, AColumn = i.ToString(), IndexedId = 0 };
 			Database.Insert(na);
 		}
+
 		var item = Database.Get<NoAttributes>(2);
 		Assert.IsNotNull(item);
 		Assert.AreEqual(2, item.Id);
 	}
 
 	[Test]
-	public void WithoutImplicitMapping ()
+	public void WithoutImplicitMapping()
 	{
 		Database.CreateTable<NoAttributesNoOptions>();
 

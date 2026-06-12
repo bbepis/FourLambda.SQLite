@@ -3,7 +3,7 @@
 [TestFixture]
 public class SQLCipherTest : DBTestHarness
 {
-	class TestTable
+	private class TestTable
 	{
 		[PrimaryKey, AutoIncrement]
 		public int Id { get; set; }
@@ -12,18 +12,19 @@ public class SQLCipherTest : DBTestHarness
 	}
 
 	[SetUp]
-	public void Setup ()
+	public void Setup()
 	{
 		// open an in memory connection and reset SQLCipher default pragma settings
-		using (var c = new SQLiteConnection (":memory:")) {
-			c.Execute ("PRAGMA cipher_default_use_hmac = ON;");
+		using (var c = new SQLiteConnection(":memory:"))
+		{
+			c.Execute("PRAGMA cipher_default_use_hmac = ON;");
 		}
 	}
 
 	[Test]
-	public void SetStringKey ()
+	public void SetStringKey()
 	{
-		string path = GetDisposablePath();
+		var path = GetDisposablePath();
 
 		var key = "SecretPassword";
 
@@ -37,97 +38,98 @@ public class SQLCipherTest : DBTestHarness
 		{
 			var r = db.Table<TestTable>().First();
 
-			Assert.AreEqual ("Hello", r.Value);
+			Assert.AreEqual("Hello", r.Value);
 		}
 	}
 
 	[Test]
-	public void SetBytesKey ()
+	public void SetBytesKey()
 	{
-		string path = GetDisposablePath();
+		var path = GetDisposablePath();
 
 		var key = new byte[32];
-		Random.Shared.NextBytes (key);
+		Random.Shared.NextBytes(key);
 
 		using (var db = new SQLiteConnection(new SQLiteConnectionString(path, key)))
 		{
 			db.CreateTable<TestTable>();
-			db.Insert (new TestTable { Value = "Hello" });
+			db.Insert(new TestTable { Value = "Hello" });
 		}
 
 		using (var db = new SQLiteConnection(new SQLiteConnectionString(path, key)))
 		{
-			var r = db.Table<TestTable>().First ();
+			var r = db.Table<TestTable>().First();
 
-			Assert.AreEqual ("Hello", r.Value);
+			Assert.AreEqual("Hello", r.Value);
 		}
 	}
 
 	[Test]
-	public void SetEmptyStringKey ()
+	public void SetEmptyStringKey()
 	{
-		using var db = new SQLiteConnection(new SQLiteConnectionString(GetDisposablePath(), key: ""));
+		using var db = new SQLiteConnection(new SQLiteConnectionString(GetDisposablePath(), ""));
 	}
 
 	[Test]
-	public void SetBadTypeKey ()
+	public void SetBadTypeKey()
 	{
 		Assert.Throws<ArgumentException>(() =>
 		{
-			using var db = new SQLiteConnection(new SQLiteConnectionString(GetDisposablePath(), key: 42));
+			using var db = new SQLiteConnection(new SQLiteConnectionString(GetDisposablePath(), 42));
 		});
 	}
 
 	[Test]
-	public void SetBadBytesKey ()
+	public void SetBadBytesKey()
 	{
 		Assert.Throws<ArgumentException>(() =>
 		{
-			using var db = new SQLiteConnection(new SQLiteConnectionString(GetDisposablePath(), key: new byte[] { 1, 2, 3, 4 }));
+			using var db =
+				new SQLiteConnection(new SQLiteConnectionString(GetDisposablePath(), new byte[] { 1, 2, 3, 4 }));
 		});
 	}
 
 	[Test]
-	public void SetPreKeyAction ()
+	public void SetPreKeyAction()
 	{
 		var path = GetDisposablePath();
 		var key = "SecretKey";
 
-		using var db = new SQLiteConnection (new SQLiteConnectionString (path, key,
-			preKeyAction: conn => conn.Execute ("PRAGMA page_size = 8192;")));
+		using var db = new SQLiteConnection(new SQLiteConnectionString(path, key,
+			conn => conn.Execute("PRAGMA page_size = 8192;")));
 
 		db.CreateTable<TestTable>();
-		db.Insert (new TestTable { Value = "Secret Value" });
-		Assert.AreEqual ("8192", db.ExecuteScalar<string>("PRAGMA page_size;"));
+		db.Insert(new TestTable { Value = "Secret Value" });
+		Assert.AreEqual("8192", db.ExecuteScalar<string>("PRAGMA page_size;"));
 	}
 
 	[Test]
-	public void SetPostKeyAction ()
+	public void SetPostKeyAction()
 	{
 		var path = GetDisposablePath();
 		var key = "SecretKey";
 
-		using var db = new SQLiteConnection (new SQLiteConnectionString (path, key,
-			postKeyAction: conn => conn.Execute ("PRAGMA page_size = 512;")));
+		using var db = new SQLiteConnection(new SQLiteConnectionString(path, key,
+			postKeyAction: conn => conn.Execute("PRAGMA page_size = 512;")));
 
 		db.CreateTable<TestTable>();
-		db.Insert (new TestTable { Value = "Secret Value" });
-		Assert.AreEqual ("512", db.ExecuteScalar<string>("PRAGMA page_size;"));
+		db.Insert(new TestTable { Value = "Secret Value" });
+		Assert.AreEqual("512", db.ExecuteScalar<string>("PRAGMA page_size;"));
 	}
 
 	[Test]
-	public void CheckJournalModeForNonKeyed ()
+	public void CheckJournalModeForNonKeyed()
 	{
 		using var db = new SQLiteConnection(GetDisposablePath());
 		db.CreateTable<TestTable>();
 
-		Assert.AreEqual ("wal", db.ExecuteScalar<string>("PRAGMA journal_mode;"));
+		Assert.AreEqual("wal", db.ExecuteScalar<string>("PRAGMA journal_mode;"));
 	}
 
 	[Test]
-	public void ResetStringKey ()
+	public void ResetStringKey()
 	{
-		string path = GetDisposablePath();
+		var path = GetDisposablePath();
 
 		var originalKey = "SecretPassword";
 		var newKey = "SecretKey";
@@ -138,52 +140,49 @@ public class SQLCipherTest : DBTestHarness
 			path = db.DatabasePath;
 
 			db.CreateTable<TestTable>();
-			db.Insert (new TestTable { Value = "Hello" });
+			db.Insert(new TestTable { Value = "Hello" });
 		}
 
 		using (var db = new SQLiteConnection(new SQLiteConnectionString(path, newKey)))
 		{
-			var r = db.Table<TestTable>().First ();
+			var r = db.Table<TestTable>().First();
 
-			Assert.AreEqual ("Hello", r.Value);
+			Assert.AreEqual("Hello", r.Value);
 		}
 	}
 
 	[Test]
 	public void ResetByteKey()
 	{
-		string path = GetDisposablePath();
+		var path = GetDisposablePath();
 
 		var originalKey = new byte[32];
 		Random.Shared.NextBytes(originalKey);
 		var newKey = new byte[32];
-		Random.Shared.NextBytes (newKey);
+		Random.Shared.NextBytes(newKey);
 
 		using (var db = new SQLiteConnection(new SQLiteConnectionString(path, originalKey)))
 		{
-			db.ReKey (newKey);
+			db.ReKey(newKey);
 			path = db.DatabasePath;
 
 			db.CreateTable<TestTable>();
-			db.Insert (new TestTable { Value = "Hello" });
+			db.Insert(new TestTable { Value = "Hello" });
 		}
 
 		using (var db = new SQLiteConnection(new SQLiteConnectionString(path, newKey)))
 		{
-			var r = db.Table<TestTable>().First ();
+			var r = db.Table<TestTable>().First();
 
-			Assert.AreEqual ("Hello", r.Value);
+			Assert.AreEqual("Hello", r.Value);
 		}
 	}
 
 	[Test]
-	public void ResetBadKey ()
+	public void ResetBadKey()
 	{
 		var key = new byte[] { 42 };
 
-		Assert.Throws<ArgumentException>(() =>
-		{
-			Database.ReKey(key);
-		});
+		Assert.Throws<ArgumentException>(() => { Database.ReKey(key); });
 	}
 }

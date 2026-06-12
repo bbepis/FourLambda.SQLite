@@ -6,6 +6,7 @@ public class ReadmeTest : DBTestHarness
 	{
 		[PrimaryKey, AutoIncrement]
 		public int Id { get; set; }
+
 		public string Symbol { get; set; }
 	}
 
@@ -13,23 +14,26 @@ public class ReadmeTest : DBTestHarness
 	{
 		[PrimaryKey, AutoIncrement]
 		public int Id { get; set; }
+
 		[Indexed]
 		public int StockId { get; set; }
+
 		public DateTime Time { get; set; }
 		public decimal Price { get; set; }
 	}
 
-	public void AddStock (string symbol)
+	public void AddStock(string symbol)
 	{
-		var stock = new Stock () {
+		var stock = new Stock
+		{
 			Symbol = symbol
 		};
-		Database.Insert (stock); // Returns the number of rows added to the table
-		Console.WriteLine ("{0} == {1}", stock.Symbol, stock.Id);
+		Database.Insert(stock); // Returns the number of rows added to the table
+		Console.WriteLine("{0} == {1}", stock.Symbol, stock.Id);
 	}
 
 	[Test]
-	public void Synchronous ()
+	public void Synchronous()
 	{
 		Database.CreateTable<Stock>();
 		Database.CreateTable<Valuation>();
@@ -54,13 +58,13 @@ public class ReadmeTest : DBTestHarness
 	{
 		var databasePath = GetDisposablePath();
 
-		var options = new SQLiteConnectionString(databasePath, key: "password");
+		var options = new SQLiteConnectionString(databasePath, "password");
 		var encryptedDb = new SQLiteConnection(options);
 
 		var options2 = new SQLiteConnectionString(databasePath,
-			key: "password",
-			preKeyAction: db => db.Execute("PRAGMA cipher_default_use_hmac = OFF;"),
-			postKeyAction: db => db.Execute("PRAGMA kdf_iter = 128000;"));
+			"password",
+			db => db.Execute("PRAGMA cipher_default_use_hmac = OFF;"),
+			db => db.Execute("PRAGMA kdf_iter = 128000;"));
 
 		var encryptedDb2 = new SQLiteConnection(options2);
 	}

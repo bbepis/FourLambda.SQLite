@@ -3,29 +3,31 @@ namespace FourLambda.SQLite.Tests;
 [TestFixture]
 public class MigrationTest : DBTestHarness
 {
-	[Table ("Test")]
-	class LowerId {
+	[Table("Test")]
+	private class LowerId
+	{
 		public int Id { get; set; }
 	}
 
-	[Table ("Test")]
-	class UpperId {
+	[Table("Test")]
+	private class UpperId
+	{
 		public int ID { get; set; }
 	}
 
 	[Test]
-	public void UpperAndLowerColumnNames ()
+	public void UpperAndLowerColumnNames()
 	{
 		Database.CreateTable<LowerId>();
 		Database.CreateTable<UpperId>();
 
-		var cols = Database.GetTableInfo ("Test").ToList ();
-		Assert.AreEqual (1, cols.Count);
-		Assert.AreEqual ("Id", cols[0].Name);
+		var cols = Database.GetTableInfo("Test").ToList();
+		Assert.AreEqual(1, cols.Count);
+		Assert.AreEqual("Id", cols[0].Name);
 	}
 
-	[Table ("TestAdd")]
-	class TestAddBefore
+	[Table("TestAdd")]
+	private class TestAddBefore
 	{
 		[PrimaryKey, AutoIncrement]
 		public int Id { get; set; }
@@ -33,8 +35,8 @@ public class MigrationTest : DBTestHarness
 		public string Name { get; set; }
 	}
 
-	[Table ("TestAdd")]
-	class TestAddAfter
+	[Table("TestAdd")]
+	private class TestAddAfter
 	{
 		[PrimaryKey, AutoIncrement]
 		public int Id { get; set; }
@@ -46,7 +48,7 @@ public class MigrationTest : DBTestHarness
 	}
 
 	[Test]
-	public void AddColumns ()
+	public void AddColumns()
 	{
 		//
 		// Init the Database
@@ -59,47 +61,49 @@ public class MigrationTest : DBTestHarness
 
 			db.CreateTable<TestAddBefore>();
 
-			var cols = db.GetTableInfo ("TestAdd");
-			Assert.AreEqual (2, cols.Count);
+			var cols = db.GetTableInfo("TestAdd");
+			Assert.AreEqual(2, cols.Count);
 
-			var o = new TestAddBefore {
-				Name = "Foo",
+			var o = new TestAddBefore
+			{
+				Name = "Foo"
 			};
 
-			db.Insert (o);
+			db.Insert(o);
 
-			var oo = db.Table<TestAddBefore>().First ();
+			var oo = db.Table<TestAddBefore>().First();
 
-			Assert.AreEqual ("Foo", oo.Name);
+			Assert.AreEqual("Foo", oo.Name);
 		}
 
 		//
 		// Migrate and use it
 		//
-		using (var db = new SQLiteConnection (path) { Trace = true })
+		using (var db = new SQLiteConnection(path) { Trace = true })
 		{
 			db.CreateTable<TestAddAfter>();
 
-			var cols = db.GetTableInfo ("TestAdd");
-			Assert.AreEqual (4, cols.Count);
+			var cols = db.GetTableInfo("TestAdd");
+			Assert.AreEqual(4, cols.Count);
 
-			var oo = db.Table<TestAddAfter>().First ();
+			var oo = db.Table<TestAddAfter>().First();
 
-			Assert.AreEqual ("Foo", oo.Name);
-			Assert.AreEqual (0, oo.IntValue);
-			Assert.AreEqual (null, oo.StringValue);
+			Assert.AreEqual("Foo", oo.Name);
+			Assert.AreEqual(0, oo.IntValue);
+			Assert.AreEqual(null, oo.StringValue);
 
-			var o = new TestAddAfter {
+			var o = new TestAddAfter
+			{
 				Name = "Bar",
 				IntValue = 42,
-				StringValue = "Hello",
+				StringValue = "Hello"
 			};
-			db.Insert (o);
+			db.Insert(o);
 
 			var ooo = db.Get<TestAddAfter>(o.Id);
-			Assert.AreEqual ("Bar", ooo.Name);
-			Assert.AreEqual (42, ooo.IntValue);
-			Assert.AreEqual ("Hello", ooo.StringValue);
+			Assert.AreEqual("Bar", ooo.Name);
+			Assert.AreEqual(42, ooo.IntValue);
+			Assert.AreEqual("Hello", ooo.StringValue);
 		}
 	}
 }

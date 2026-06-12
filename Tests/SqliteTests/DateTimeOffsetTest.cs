@@ -3,9 +3,9 @@ namespace FourLambda.SQLite.Tests;
 [TestFixture]
 public class DateTimeOffsetTest : DBTestHarness
 {
-	const string TestFormat = "yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fffK";
+	private const string TestFormat = "yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fffK";
 
-	abstract class BaseDateTimeOffsetClass
+	private abstract class BaseDateTimeOffsetClass
 	{
 		[PrimaryKey, AutoIncrement]
 		public int Id { get; set; }
@@ -13,24 +13,24 @@ public class DateTimeOffsetTest : DBTestHarness
 		public abstract DateTimeOffset ModifiedTime { get; set; }
 	}
 
-	class DateTimeOffsetAsTicksClass : BaseDateTimeOffsetClass
+	private class DateTimeOffsetAsTicksClass : BaseDateTimeOffsetClass
 	{
 		public override DateTimeOffset ModifiedTime { get; set; }
 	}
 
-	class DateTimeOffsetAsStringClass : BaseDateTimeOffsetClass
+	private class DateTimeOffsetAsStringClass : BaseDateTimeOffsetClass
 	{
 		[StoreAsText]
 		public override DateTimeOffset ModifiedTime { get; set; }
 	}
 
-	class DateTimeOffsetAsStringFormattedClass : BaseDateTimeOffsetClass
+	private class DateTimeOffsetAsStringFormattedClass : BaseDateTimeOffsetClass
 	{
 		[StoreAsText(Format = TestFormat)]
 		public override DateTimeOffset ModifiedTime { get; set; }
 	}
 
-	private static readonly DateTimeOffset TestDateTimeOffset = new DateTimeOffset(2012, 1, 14, 3, 2, 1, 234, TimeSpan.FromHours(2));
+	private static readonly DateTimeOffset TestDateTimeOffset = new(2012, 1, 14, 3, 2, 1, 234, TimeSpan.FromHours(2));
 
 	[Test]
 	public void AsTicks()
@@ -50,13 +50,13 @@ public class DateTimeOffsetTest : DBTestHarness
 		TestWrite<DateTimeOffsetAsStringFormattedClass>(TestDateTimeOffset, TestDateTimeOffset.ToString(TestFormat));
 	}
 
-	void TestWrite<T>(DateTimeOffset dateTime, string expected) where T : BaseDateTimeOffsetClass, new()
+	private void TestWrite<T>(DateTimeOffset dateTime, string expected) where T : BaseDateTimeOffsetClass, new()
 	{
 		Database.CreateTable<T>();
 
 		var o = new T
 		{
-			ModifiedTime = dateTime,
+			ModifiedTime = dateTime
 		};
 		Database.Insert(o);
 		var o2 = Database.Get<T>(o.Id);

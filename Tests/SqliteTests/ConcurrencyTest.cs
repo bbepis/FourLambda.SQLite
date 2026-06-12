@@ -74,11 +74,7 @@ public class ConcurrencyTest : DBTestHarness
 
 						for (var i = 0; i < 50; i++)
 						{
-							var newRecord = new TestObj()
-							{
-							};
-
-							dbConnection.Insert(newRecord);
+							dbConnection.Insert(new TestObj());
 						}
 
 						System.Diagnostics.Debug.WriteLine($"{Environment.CurrentManagedThreadId} Inserted records");
@@ -97,7 +93,7 @@ public class ConcurrencyTest : DBTestHarness
 		var tasks = new List<Task>
 		{
 			Task.Run(ReaderTask),
-			Task.Run(WriterTask),
+			Task.Run(WriterTask)
 		};
 
 		// Wait 5sec
@@ -112,19 +108,15 @@ public class ConcurrencyTest : DBTestHarness
 	/// fail most of the time, though.
 	/// </summary>
 	[Test]
-	public void TestInsertCommandCreation ()
+	public void TestInsertCommandCreation()
 	{
 		using var mutexConnection = CreateMutexConnection();
 
-		var obj1 = new TestObj ();
-		var obj2 = new TestObj ();
-		var taskA = Task.Run (() => {
-			mutexConnection.Insert(obj1);
-		});
-		var taskB = Task.Run (() => {
-			mutexConnection.Insert(obj2);
-		});
+		var obj1 = new TestObj();
+		var obj2 = new TestObj();
+		var taskA = Task.Run(() => { mutexConnection.Insert(obj1); });
+		var taskB = Task.Run(() => { mutexConnection.Insert(obj2); });
 
-		Task.WhenAll (taskA, taskB).Wait ();
+		Task.WhenAll(taskA, taskB).Wait();
 	}
 }

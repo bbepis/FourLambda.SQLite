@@ -14,7 +14,7 @@ public class DbCommandTest : DBTestHarness
 			.ExecuteDeferredQuery<Product>(new TableMapping(typeof(Product))).ToList();
 
 
-		Assert.AreEqual (test.Count, 1);
+		Assert.AreEqual(test.Count, 1);
 	}
 
 	/// <summary>
@@ -30,6 +30,6 @@ public class DbCommandTest : DBTestHarness
 		var test = Database.CreateCommand("select * from Product")
 			.ExecuteDeferredQuery<object>(new TableMapping(typeof(Product))).ToList();
 
-		Assert.AreEqual (test.Count, 1);
+		Assert.AreEqual(test.Count, 1);
 	}
 }

@@ -1,7 +1,7 @@
 ﻿namespace FourLambda.SQLite.Tests;
 
 [TestFixture]
-class EqualsTest : DBTestHarness
+internal class EqualsTest : DBTestHarness
 {
 	public abstract class TestObjBase<T>
 	{
@@ -13,17 +13,18 @@ class EqualsTest : DBTestHarness
 		public DateTime Date { get; set; }
 	}
 
-	public class TestObjString : TestObjBase<string> { }
+	public class TestObjString : TestObjBase<string>;
 
 	[Test]
 	public void CanCompareAnyField()
 	{
 		var n = 20;
-		var cq =from i in Enumerable.Range(1, n)
-			select new TestObjString {
+		var cq = Enumerable.Range(1, n)
+			.Select(i => new TestObjString
+			{
 				Data = Convert.ToString(i),
 				Date = new DateTime(2013, 1, i)
-			};
+			});
 
 		Database.CreateTable<TestObjString>();
 		Database.InsertAll(cq);
