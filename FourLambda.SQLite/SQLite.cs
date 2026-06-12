@@ -118,15 +118,6 @@ public enum CreateFlags
 	/// </summary>
 	ImplicitPK = 0x001,
 	/// <summary>
-	/// Create indices for properties ending in 'Id' (case-insensitive).
-	/// </summary>
-	ImplicitIndex = 0x002,
-	/// <summary>
-	/// Create a primary key for a property called 'Id' and
-	/// create an indices for properties ending in 'Id' (case-insensitive).
-	/// </summary>
-	AllImplicit = 0x003,
-	/// <summary>
 	/// Creates all columns as nullable unless explicitly marked with <see cref="NotNullAttribute"/> or <see cref="PrimaryKeyAttribute"/>.
 	/// </summary>
 	ImplicitNullable = 0x008,
@@ -2866,16 +2857,13 @@ public class TableMapping
 		_insertOrReplaceColumns = Columns.ToArray();
 	}
 
-	private IReadOnlyCollection<MemberInfo> GetPublicMembers(
+	private IReadOnlyCollection<PropertyInfo> GetPublicMembers(
 		[DynamicallyAccessedMembers (DynamicallyAccessedMemberTypes.All)]
 		Type type)
 	{
-		if (type.Name.StartsWith("ValueTuple`"))
-			return GetFieldsFromValueTuple(type);
-
-		var members = new List<MemberInfo>();
+		var members = new List<PropertyInfo>();
 		var memberNames = new HashSet<string>();
-		var newMembers = new List<MemberInfo>();
+		var newMembers = new List<PropertyInfo>();
 		do
 		{
 			var ti = type.GetTypeInfo();
@@ -2899,20 +2887,6 @@ public class TableMapping
 		while (type != typeof(object));
 
 		return members;
-	}
-
-	private IReadOnlyCollection<MemberInfo> GetFieldsFromValueTuple(
-		[DynamicallyAccessedMembers (DynamicallyAccessedMemberTypes.PublicFields)]
-		Type type)
-	{
-		Method = MapMethod.ByPosition;
-		var fields = type.GetFields();
-
-		// https://docs.microsoft.com/en-us/dotnet/api/system.valuetuple-8.rest
-		if (fields.Length >= 8)
-			throw new NotSupportedException("ValueTuple with more than 7 members not supported due to nesting; see https://docs.microsoft.com/en-us/dotnet/api/system.valuetuple-8.rest");
-
-		return fields;
 	}
 
 	public bool HasAutoIncPK { get; private set; }
@@ -2958,13 +2932,11 @@ public class TableMapping
 
 	public class Column
 	{
-		MemberInfo _member;
-
 		public string Name { get; private set; }
 
-		public PropertyInfo PropertyInfo => _member as PropertyInfo;
+		public PropertyInfo PropertyInfo { get; private set; }
 
-		public string PropertyName { get { return _member.Name; } }
+		public string PropertyName => PropertyInfo.Name;
 
 		public Type ColumnType { get; private set; }
 
@@ -2988,98 +2960,64 @@ public class TableMapping
 
 		public string? StoreAsTextFormat { get; private set; }
 
-		public Column(MemberInfo member, CreateFlags createFlags = CreateFlags.None)
+		public Column(PropertyInfo propertyInfo, CreateFlags createFlags = CreateFlags.None)
 		{
-			_member = member;
-			var memberType = GetMemberType(member);
+			PropertyInfo = propertyInfo;
+			var memberType = propertyInfo.PropertyType;
 
-			var colAttr = member.GetCustomAttribute<ColumnAttribute>();
+			var colAttr = propertyInfo.GetCustomAttribute<ColumnAttribute>();
 
-			var memberStoreAsTextAttr = member.GetCustomAttribute<StoreAsTextAttribute>();
+			var memberStoreAsTextAttr = propertyInfo.GetCustomAttribute<StoreAsTextAttribute>();
 			StoreAsText = memberStoreAsTextAttr != null || memberType.GetCustomAttribute<StoreAsTextAttribute>() != null;
 			StoreAsTextFormat = memberStoreAsTextAttr?.Format;
 
-			Name = colAttr?.Name ?? member.Name;
+			Name = colAttr?.Name ?? propertyInfo.Name;
 
 			//If this type is Nullable<T> then Nullable.GetUnderlyingType returns the T, otherwise it returns null, so get the actual type instead
 			ColumnType = Nullable.GetUnderlyingType(memberType) ?? memberType;
-			Collation = Orm.Collation(member);
+			Collation = Orm.Collation(propertyInfo);
 
-			PKOrder = Orm.PKOrder(member);
+			PKOrder = Orm.PKOrder(propertyInfo);
 
 			var implicitPk = (createFlags & CreateFlags.ImplicitPK) == CreateFlags.ImplicitPK &&
-			                 member.Name.Equals(Orm.ImplicitPkName, StringComparison.OrdinalIgnoreCase);
+			                 propertyInfo.Name.Equals(Orm.ImplicitPkName, StringComparison.OrdinalIgnoreCase);
 
 			if (PKOrder == null && implicitPk)
 				PKOrder = 0;
 
-			var isAuto = Orm.IsAutoInc(member) || (IsPK && ((createFlags & CreateFlags.AutoIncPK) == CreateFlags.AutoIncPK));
+			var isAuto = Orm.IsAutoInc(propertyInfo) || (IsPK && ((createFlags & CreateFlags.AutoIncPK) == CreateFlags.AutoIncPK));
 			IsAutoGuid = isAuto && ColumnType == typeof(Guid);
 			IsAutoInc = isAuto && !IsAutoGuid;
 
-			Indices = Orm.GetIndices(member);
-			if (!Indices.Any()
-			    && IsPK == null
-			    && ((createFlags & CreateFlags.ImplicitIndex) == CreateFlags.ImplicitIndex)
-			    && Name.EndsWith(Orm.ImplicitIndexSuffix, StringComparison.OrdinalIgnoreCase)
-			   )
-			{
-				Indices = new IndexedAttribute[] { new IndexedAttribute() };
-			}
+			Indices = Orm.GetIndices(propertyInfo);
 
-			var nullabilityContext = new NullabilityInfoContext();
-			var nullabilityInfo = member is PropertyInfo propertyInfo
-				? nullabilityContext.Create(propertyInfo)
-				: nullabilityContext.Create((FieldInfo)member);
+			var nullabilityInfo = new NullabilityInfoContext().Create(propertyInfo);
 
 			bool explicitlyNull = Nullable.GetUnderlyingType(memberType) != null || nullabilityInfo.WriteState == NullabilityState.Nullable;
 
 			if (explicitlyNull && IsPK)
 				throw new ArgumentException("A column marked as primary key cannot be nullable.");
 
-			if (explicitlyNull && Orm.IsMarkedNotNull(member))
+			if (explicitlyNull && Orm.IsMarkedNotNull(propertyInfo))
 				throw new ArgumentException("A column cannot be marked as [NotNull] while having an explicitly nullable property type.");
 			
-			IsNullable = explicitlyNull || ((createFlags.HasFlag(CreateFlags.ImplicitNullable) || nullabilityInfo.WriteState == NullabilityState.Unknown) && !(IsPK || Orm.IsMarkedNotNull(member)));
-			MaxStringLength = Orm.MaxStringLength(member);
+			IsNullable = explicitlyNull || ((createFlags.HasFlag(CreateFlags.ImplicitNullable) || nullabilityInfo.WriteState == NullabilityState.Unknown) && !(IsPK || Orm.IsMarkedNotNull(propertyInfo)));
+			MaxStringLength = Orm.MaxStringLength(propertyInfo);
 
 			SqliteType = Orm.SqlType(this);
 		}
 
-		public Column(PropertyInfo member, CreateFlags createFlags = CreateFlags.None)
-			: this((MemberInfo)member, createFlags)
-		{ }
-
 		public void SetValue(object obj, object val)
 		{
-			if (_member is PropertyInfo propy)
-			{
-				if (val != null && ColumnType.GetTypeInfo().IsEnum)
-					propy.SetValue(obj, Enum.ToObject(ColumnType, val));
-				else
-					propy.SetValue(obj, val);
-			}
-			else if (_member is FieldInfo field)
-			{
-				if (val != null && ColumnType.GetTypeInfo().IsEnum)
-					field.SetValue(obj, Enum.ToObject(ColumnType, val));
-				else
-					field.SetValue(obj, val);
-			}
+			if (val != null && ColumnType.GetTypeInfo().IsEnum)
+				PropertyInfo.SetValue(obj, Enum.ToObject(ColumnType, val));
 			else
-				throw new InvalidProgramException("unreachable condition");
+				PropertyInfo.SetValue(obj, val);
 		}
 
 		public object? GetValue(object obj)
 		{
-			object? value;
-
-			if (_member is PropertyInfo propy)
-				value = propy.GetValue(obj);
-			else if (_member is FieldInfo field)
-				value = field.GetValue(obj);
-			else
-				throw new InvalidProgramException("unreachable condition");
+			object? value = PropertyInfo.GetValue(obj);
 
 			if (!StoreAsText || value == null)
 				return value;
@@ -3092,16 +3030,6 @@ public class TableMapping
 				IFormattable formattable => formattable.ToString(StoreAsTextFormat, null),
 				_ => value
 			};
-		}
-
-		private static Type GetMemberType(MemberInfo m)
-		{
-			switch (m.MemberType)
-			{
-				case MemberTypes.Property: return ((PropertyInfo)m).PropertyType;
-				case MemberTypes.Field: return ((FieldInfo)m).FieldType;
-				default: throw new InvalidProgramException($"{nameof(TableMapping)} supports properties or fields only.");
-			}
 		}
 	}
 
@@ -3340,6 +3268,9 @@ public partial class SQLiteCommand
 		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
 		T>()
 	{
+		if (typeof(T).Name.StartsWith("ValueTuple`"))
+			return ExecuteDeferredQueryAsValueTuple<T>();
+
 		return ExecuteDeferredQuery<T>(_conn.GetMapping(typeof(T)));
 	}
 
@@ -3347,6 +3278,9 @@ public partial class SQLiteCommand
 		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
 		T>()
 	{
+		if (typeof(T).Name.StartsWith("ValueTuple`"))
+			return ExecuteDeferredQueryAsValueTuple<T>().ToList();
+
 		return ExecuteDeferredQuery<T>(_conn.GetMapping(typeof(T))).ToList();
 	}
 
@@ -3355,20 +3289,6 @@ public partial class SQLiteCommand
 		return ExecuteDeferredQuery<T>(map).ToList();
 	}
 
-	/// <summary>
-	/// Invoked every time an instance is loaded from the database.
-	/// </summary>
-	/// <param name='obj'>
-	/// The newly created object.
-	/// </param>
-	/// <remarks>
-	/// This can be overridden in combination with the <see cref="SQLiteConnection.NewCommand"/>
-	/// method to hook into the life-cycle of objects.
-	/// </remarks>
-	protected virtual void OnInstanceCreated(object obj)
-	{
-		// Can be overridden.
-	}
 
 	public IEnumerable<T> ExecuteDeferredQuery<T>(TableMapping map)
 	{
@@ -3447,7 +3367,43 @@ public partial class SQLiteCommand
 						cols[i].SetValue(obj, val);
 					}
 				}
-				OnInstanceCreated(obj);
+
+				yield return (T)obj;
+			}
+		}
+		finally
+		{
+			SQLite3.Finalize(stmt);
+		}
+	}
+
+	private IEnumerable<T> ExecuteDeferredQueryAsValueTuple<T>()
+	{
+		if (_conn.Trace)
+		{
+			_conn.Tracer?.Invoke("Executing Query: " + this);
+		}
+
+		var fields = typeof(T).GetFields();
+
+		// https://docs.microsoft.com/en-us/dotnet/api/system.valuetuple-8.rest
+		if (fields.Length > 7)
+			throw new NotSupportedException("ValueTuple with more than 7 members not supported due to nesting; see https://docs.microsoft.com/en-us/dotnet/api/system.valuetuple-8.rest");
+
+		var stmt = Prepare();
+		try
+		{
+			while (SQLite3.Step(stmt) == SQLite3.Result.Row)
+			{
+				var obj = (object)Activator.CreateInstance<T>();
+
+				for (int i = 0; i < fields.Length; i++)
+				{
+					var colType = SQLite3.ColumnType(stmt, i);
+					var val = ReadCol(stmt, i, colType, fields[i].FieldType, null);
+					fields[i].SetValue(obj, val);
+				}
+
 				yield return (T)obj;
 			}
 		}
