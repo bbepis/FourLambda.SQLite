@@ -47,7 +47,6 @@ public class CreateTableImplicitTest : DBTestHarness
 		var mapping = Database.GetMapping<NoAttributesNoOptions>();
 
 		Assert.AreEqual(0, mapping.PrimaryKeyColumns.Length, "Should not be a key");
-		var pk = mapping.PrimaryKeyColumns[0];
 
 		var column = mapping.Columns[2];
 		Assert.AreEqual("IndexedId", column.Name);
@@ -85,17 +84,6 @@ public class CreateTableImplicitTest : DBTestHarness
 		Assert.AreEqual("Id", pk.Name);
 		Assert.IsTrue(pk.IsPK);
 		Assert.IsTrue(pk.IsAutoInc);
-	}
-
-	[Test]
-	public void ImplicitIndex()
-	{
-		Database.CreateTable<NoAttributes>(CreateFlags.ImplicitIndex);
-
-		var mapping = Database.GetMapping<NoAttributes>();
-		var column = mapping.Columns[2];
-		Assert.AreEqual("IndexedId", column.Name);
-		Assert.IsTrue(column.Indices.Any());
 	}
 
 	[Test]

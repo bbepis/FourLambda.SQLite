@@ -15,20 +15,30 @@ public abstract class DBTestHarness
 	}
 
 	[SetUp]
-	private void Setup()
+	protected void Setup()
 	{
 		Database = new SQLiteConnection(":memory:");
 		Database.Trace = true;
+		Database.Tracer = Console.WriteLine;
 		InitializeDatabase();
 	}
 
 	[TearDown]
-	private void Teardown()
+	protected void Teardown()
 	{
 		Database.Close();
 
-		foreach (var path in temporaryPaths)
-			if (File.Exists(path))
-				File.Delete(path);
+		foreach (var path in temporaryPaths.ToArray())
+		{
+			try
+			{
+				if (File.Exists(path))
+					File.Delete(path);
+			}
+			finally
+			{
+				temporaryPaths.Remove(path);
+			}
+		}
 	}
 }

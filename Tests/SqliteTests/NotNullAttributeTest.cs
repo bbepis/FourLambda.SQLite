@@ -5,28 +5,35 @@ namespace FourLambda.SQLite.Tests;
 [TestFixture]
 public class NotNullAttributeTest : DBTestHarness
 {
+	private class ExpectedNullAttribute(bool shouldBeNull) : Attribute
+	{
+		public bool ShouldBeNull => shouldBeNull;
+	}
+
 	private class NotNullNoPK
 	{
-		[PrimaryKey, AutoIncrement]
-		public int? objectId { get; set; }
+		[PrimaryKey, AutoIncrement, ExpectedNull(false)]
+		public int objectId { get; set; }
 
-		[NotNull]
-		public int? RequiredIntProp { get; set; }
+		[ExpectedNull(false)]
+		public int RequiredIntProp { get; set; }
 
+		[ExpectedNull(true)]
 		public int? OptionalIntProp { get; set; }
 
-		[NotNull]
+		[NotNull, ExpectedNull(false)]
 		public string RequiredStringProp { get; set; }
 
+		[ExpectedNull(true)]
 		public string OptionalStringProp { get; set; }
 
-		[NotNull]
+		[NotNull, ExpectedNull(false)]
 		public string AnotherRequiredStringProp { get; set; }
 	}
 
 	private class ClassWithPK
 	{
-		[PrimaryKey, AutoIncrement]
+		[PrimaryKey, AutoIncrement, ExpectedNull(false)]
 		public int Id { get; set; }
 	}
 
@@ -35,17 +42,15 @@ public class NotNullAttributeTest : DBTestHarness
 		Database.CreateTable<NotNullNoPK>();
 	}
 
-	private IEnumerable<SQLiteConnection.ColumnInfo> GetExpectedColumnInfos(Type type)
+	private SQLiteConnection.ColumnInfo[] GetExpectedColumnInfos(Type type)
 	{
 		var expectedValues = type.GetRuntimeProperties()
 			.Select(prop => new SQLiteConnection.ColumnInfo
 			{
 				Name = prop.Name,
-				notnull = prop.GetCustomAttribute<NotNullAttribute>(true) == null &&
-				          prop.GetCustomAttribute<PrimaryKeyAttribute>(true) == null
-					? 0
-					: 1
-			});
+				notnull = prop.GetCustomAttribute<ExpectedNullAttribute>().ShouldBeNull ? 0 : 1
+			})
+			.ToArray();
 
 		return expectedValues;
 	}
@@ -71,17 +76,18 @@ public class NotNullAttributeTest : DBTestHarness
 	public void CreateTableWithNotNullConstraints()
 	{
 		Database.CreateTable<NotNullNoPK>();
-		var cols = Database.GetTableInfo("NotNullNoPK");
+		var cols = Database.GetTableInfo(nameof(NotNullNoPK));
 
 		var joined = GetExpectedColumnInfos(typeof(NotNullNoPK))
 			.Join(cols, expected => expected.Name, actual => actual.Name,
 				(expected, actual) => new { expected, actual })
 			.Where(@t => @t.actual.notnull != @t.expected.notnull)
-			.Select(@t => @t.actual.Name);
+			.Select(@t => @t.actual.Name)
+			.ToArray();
 
 		Assert.AreNotEqual(0, cols.Count(), "Failed to get table info");
-		Assert.IsTrue(joined.Count() == 0,
-			$"not null constraint was not created for the following properties: {string.Join(", ", joined.ToArray())}");
+		Assert.IsTrue(joined.Length == 0,
+			$"not null constraint was not created for the following properties: {string.Join(", ", joined)}");
 	}
 
 	private NotNullConstraintViolationException AssertNotNullConstraint(Action action)
@@ -121,15 +127,16 @@ public class NotNullAttributeTest : DBTestHarness
 	[Test]
 	public void UpdateWithNullThrowsException()
 	{
+		var obj = new NotNullNoPK
+		{
+			AnotherRequiredStringProp = "Another required string",
+			RequiredIntProp = 123,
+			RequiredStringProp = "Required string"
+		};
+		Database.Insert(obj);
+
 		AssertNotNullConstraint(() =>
 		{
-			var obj = new NotNullNoPK
-			{
-				AnotherRequiredStringProp = "Another required string",
-				RequiredIntProp = 123,
-				RequiredStringProp = "Required string"
-			};
-			Database.Insert(obj);
 			obj.RequiredStringProp = null;
 			Database.Update(obj);
 		});
@@ -144,7 +151,7 @@ public class NotNullAttributeTest : DBTestHarness
 			Database.Insert(obj);
 		});
 
-		var expected = "AnotherRequiredStringProp, RequiredIntProp";
+		var expected = "AnotherRequiredStringProp";
 		var actual = string.Join(", ",
 			ex.Columns.Where(c => !c.IsPK).OrderBy(p => p.PropertyName).Select(c => c.PropertyName));
 
@@ -155,15 +162,16 @@ public class NotNullAttributeTest : DBTestHarness
 	[Test]
 	public void NotNullConstraintExceptionListsOffendingColumnsOnUpdate()
 	{
+		var obj = new NotNullNoPK
+		{
+			AnotherRequiredStringProp = "Another required string",
+			RequiredIntProp = 123,
+			RequiredStringProp = "Required string"
+		};
+		Database.Insert(obj);
+
 		var ex = AssertNotNullConstraint(() =>
 		{
-			var obj = new NotNullNoPK
-			{
-				AnotherRequiredStringProp = "Another required string",
-				RequiredIntProp = 123,
-				RequiredStringProp = "Required string"
-			};
-			Database.Insert(obj);
 			obj.RequiredStringProp = null;
 			Database.Update(obj);
 		});
@@ -190,12 +198,12 @@ public class NotNullAttributeTest : DBTestHarness
 	[Test]
 	public void UpdateQueryWithNullThrowsException()
 	{
-		AssertNotNullConstraint(() =>
-		{
 			Database.Execute(
 				"insert into \"NotNullNoPK\" (AnotherRequiredStringProp, RequiredIntProp, RequiredStringProp) values(?, ?, ?)",
 				"Another required string", 123, "Required string");
 
+		AssertNotNullConstraint(() =>
+		{
 			Database.Execute(
 				"update \"NotNullNoPK\" set AnotherRequiredStringProp=?, RequiredIntProp=?, RequiredStringProp=? where ObjectId=?",
 				"Another required string", 123, null, 1);
@@ -205,16 +213,16 @@ public class NotNullAttributeTest : DBTestHarness
 	[Test]
 	public void ExecuteNonQueryWithNullThrowsException()
 	{
+		var obj = new NotNullNoPK
+		{
+			AnotherRequiredStringProp = "Another required prop",
+			RequiredIntProp = 123,
+			RequiredStringProp = "Required string prop"
+		};
+		Database.Insert(obj);
+
 		AssertNotNullConstraint(() =>
 		{
-			var obj = new NotNullNoPK
-			{
-				AnotherRequiredStringProp = "Another required prop",
-				RequiredIntProp = 123,
-				RequiredStringProp = "Required string prop"
-			};
-			Database.Insert(obj);
-
 			var obj2 = new NotNullNoPK
 			{
 				objectId = 1,

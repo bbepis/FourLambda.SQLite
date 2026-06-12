@@ -1,19 +1,9 @@
-﻿using System.Threading.Tasks;
-
-#if NETFX_CORE
-using Microsoft.VisualStudio.TestPlatform.UnitTestFramework;
-using SetUp = Microsoft.VisualStudio.TestPlatform.UnitTestFramework.TestInitializeAttribute;
-using TestFixture = Microsoft.VisualStudio.TestPlatform.UnitTestFramework.TestClassAttribute;
-using Test = Microsoft.VisualStudio.TestPlatform.UnitTestFramework.TestMethodAttribute;
-#else
-#endif
-
-namespace FourLambda.SQLite.Tests;
+﻿namespace FourLambda.SQLite.Tests;
 
 [TestFixture]
 public class TimeSpanTest : DBTestHarness
 {
-	private const string TestFormat = "hh':'mm':'ss";
+	private const string TestFormat = @"dddddd\.hh\:mm\:ss\.fffffff";
 
 	private abstract class BaseTimeSpanClass
 	{
@@ -23,17 +13,20 @@ public class TimeSpanTest : DBTestHarness
 		public abstract TimeSpan Elapsed { get; set; }
 	}
 
+	[Table("TestObj")]
 	private class TimeSpanAsTicksClass : BaseTimeSpanClass
 	{
 		public override TimeSpan Elapsed { get; set; }
 	}
 
+	[Table("TestObj")]
 	private class TimeSpanAsStringClass : BaseTimeSpanClass
 	{
 		[StoreAsText]
 		public override TimeSpan Elapsed { get; set; }
 	}
 
+	[Table("TestObj")]
 	private class TimeSpanAsStringFormattedClass : BaseTimeSpanClass
 	{
 		[StoreAsText(Format = TestFormat)]
@@ -51,7 +44,7 @@ public class TimeSpanTest : DBTestHarness
 	[Test]
 	public void AsString()
 	{
-		TestWrite<TimeSpanAsStringClass>(TestTimeSpan, TestTimeSpan.ToString("o"));
+		TestWrite<TimeSpanAsStringClass>(TestTimeSpan, TestTimeSpan.ToString("c"));
 	}
 
 	[Test]
@@ -69,6 +62,7 @@ public class TimeSpanTest : DBTestHarness
 			Elapsed = dateTime
 		};
 		Database.Insert(o);
+
 		var o2 = Database.Get<T>(o.Id);
 		Assert.AreEqual(o.Elapsed, o2.Elapsed);
 

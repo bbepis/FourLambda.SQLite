@@ -13,17 +13,20 @@ public class DateTimeOffsetTest : DBTestHarness
 		public abstract DateTimeOffset ModifiedTime { get; set; }
 	}
 
+	[Table("TestObj")]
 	private class DateTimeOffsetAsTicksClass : BaseDateTimeOffsetClass
 	{
 		public override DateTimeOffset ModifiedTime { get; set; }
 	}
 
+	[Table("TestObj")]
 	private class DateTimeOffsetAsStringClass : BaseDateTimeOffsetClass
 	{
 		[StoreAsText]
 		public override DateTimeOffset ModifiedTime { get; set; }
 	}
 
+	[Table("TestObj")]
 	private class DateTimeOffsetAsStringFormattedClass : BaseDateTimeOffsetClass
 	{
 		[StoreAsText(Format = TestFormat)]
@@ -35,7 +38,7 @@ public class DateTimeOffsetTest : DBTestHarness
 	[Test]
 	public void AsTicks()
 	{
-		TestWrite<DateTimeOffsetAsTicksClass>(TestDateTimeOffset, TestDateTimeOffset.Ticks.ToString());
+		TestWrite<DateTimeOffsetAsTicksClass>(TestDateTimeOffset, TestDateTimeOffset.UtcTicks.ToString());
 	}
 
 	[Test]
@@ -59,6 +62,7 @@ public class DateTimeOffsetTest : DBTestHarness
 			ModifiedTime = dateTime
 		};
 		Database.Insert(o);
+
 		var o2 = Database.Get<T>(o.Id);
 		Assert.AreEqual(o.ModifiedTime, o2.ModifiedTime);
 

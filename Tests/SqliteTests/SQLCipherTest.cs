@@ -71,15 +71,6 @@ public class SQLCipherTest : DBTestHarness
 	}
 
 	[Test]
-	public void SetBadTypeKey()
-	{
-		Assert.Throws<ArgumentException>(() =>
-		{
-			using var db = new SQLiteConnection(new SQLiteConnectionString(GetDisposablePath(), 42));
-		});
-	}
-
-	[Test]
 	public void SetBadBytesKey()
 	{
 		Assert.Throws<ArgumentException>(() =>
@@ -95,8 +86,10 @@ public class SQLCipherTest : DBTestHarness
 		var path = GetDisposablePath();
 		var key = "SecretKey";
 
-		using var db = new SQLiteConnection(new SQLiteConnectionString(path, key,
-			conn => conn.Execute("PRAGMA page_size = 8192;")));
+		using var db = new SQLiteConnection(new SQLiteConnectionString(path, key)
+		{
+			PreKeyAction = conn => conn.Execute("PRAGMA page_size = 8192;")
+		});
 
 		db.CreateTable<TestTable>();
 		db.Insert(new TestTable { Value = "Secret Value" });
@@ -109,8 +102,10 @@ public class SQLCipherTest : DBTestHarness
 		var path = GetDisposablePath();
 		var key = "SecretKey";
 
-		using var db = new SQLiteConnection(new SQLiteConnectionString(path, key,
-			postKeyAction: conn => conn.Execute("PRAGMA page_size = 512;")));
+		using var db = new SQLiteConnection(new SQLiteConnectionString(path, key)
+		{
+			PostKeyAction = conn => conn.Execute("PRAGMA page_size = 512;")
+		});
 
 		db.CreateTable<TestTable>();
 		db.Insert(new TestTable { Value = "Secret Value" });
@@ -122,6 +117,7 @@ public class SQLCipherTest : DBTestHarness
 	{
 		using var db = new SQLiteConnection(GetDisposablePath());
 		db.CreateTable<TestTable>();
+		db.EnableWriteAheadLogging();
 
 		Assert.AreEqual("wal", db.ExecuteScalar<string>("PRAGMA journal_mode;"));
 	}

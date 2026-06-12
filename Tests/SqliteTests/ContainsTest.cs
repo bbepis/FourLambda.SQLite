@@ -22,11 +22,11 @@ public class ContainsTest : DBTestHarness
 	public void ContainsConstantData()
 	{
 		var n = 20;
-		var cq = from i in Enumerable.Range(1, n)
-			select new TestObj
+		var cq = Enumerable.Range(1, n)
+			.Select(i => new TestObj
 			{
 				Name = i.ToString()
-			};
+			});
 
 		Database.InsertAll(cq);
 
@@ -52,11 +52,11 @@ public class ContainsTest : DBTestHarness
 	public void ContainsQueriedData()
 	{
 		var n = 20;
-		var cq = from i in Enumerable.Range(1, n)
-			select new TestObj
+		var cq = Enumerable.Range(1, n)
+			.Select(i => new TestObj
 			{
 				Name = i.ToString()
-			};
+			});
 
 		Database.InsertAll(cq);
 

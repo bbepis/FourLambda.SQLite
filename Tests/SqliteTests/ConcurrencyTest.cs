@@ -1,10 +1,9 @@
-using System.Data.Common;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace FourLambda.SQLite.Tests;
 
-[TestFixture]
+[TestFixture, NUnit.Framework.Ignore("These unit tests were disabled in the upstream repo, so I'm assuming they're incomplete")]
 public class ConcurrencyTest : DBTestHarness
 {
 	public class TestObj

@@ -13,17 +13,20 @@ public class DateTimeTest : DBTestHarness
 		public abstract DateTime? ModifiedTime { get; set; }
 	}
 
+	[Table("TestObj")]
 	private class DateTimeAsTicksClass : BaseDateTimeClass
 	{
 		public override DateTime? ModifiedTime { get; set; }
 	}
 
+	[Table("TestObj")]
 	private class DateTimeAsStringClass : BaseDateTimeClass
 	{
 		[StoreAsText]
 		public override DateTime? ModifiedTime { get; set; }
 	}
 
+	[Table("TestObj")]
 	private class DateTimeAsStringFormattedClass : BaseDateTimeClass
 	{
 		[StoreAsText(Format = TestFormat)]
@@ -44,6 +47,7 @@ public class DateTimeTest : DBTestHarness
 		TestWrite<DateTimeAsStringClass>(TestDateTime, TestDateTime.ToString("o"));
 	}
 
+	[Test]
 	public void AsCustomFormattedString()
 	{
 		TestWrite<DateTimeAsStringFormattedClass>(TestDateTime, TestDateTime.ToString(TestFormat));
@@ -58,6 +62,7 @@ public class DateTimeTest : DBTestHarness
 			ModifiedTime = dateTime
 		};
 		Database.Insert(o);
+
 		var o2 = Database.Get<T>(o.Id);
 		Assert.AreEqual(o.ModifiedTime, o2.ModifiedTime);
 
@@ -76,6 +81,9 @@ public class DateTimeTest : DBTestHarness
 		Database.Insert(new T { ModifiedTime = new DateTime(1980, 7, 23) });
 		Database.Insert(new T { ModifiedTime = null });
 		Database.Insert(new T { ModifiedTime = new DateTime(2019, 1, 23) });
+
+		var stored = Database.QueryScalars<string>("SELECT ModifiedTime FROM TestObj;").ToList();
+
 
 		var res = Database.Table<T>().Where(x => x.ModifiedTime == epochTime).ToList();
 		Assert.AreEqual(1, res.Count);

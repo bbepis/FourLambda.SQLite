@@ -58,15 +58,17 @@ public class ReadmeTest : DBTestHarness
 	{
 		var databasePath = GetDisposablePath();
 
-		var options = new SQLiteConnectionString(databasePath, "password");
-		var encryptedDb = new SQLiteConnection(options);
+		const string key = "password";
+		var options = new SQLiteConnectionString(databasePath, key);
+		using var encryptedDb = new SQLiteConnection(options);
 
-		var options2 = new SQLiteConnectionString(databasePath,
-			"password",
-			db => db.Execute("PRAGMA cipher_default_use_hmac = OFF;"),
-			db => db.Execute("PRAGMA kdf_iter = 128000;"));
+		var options2 = new SQLiteConnectionString(databasePath, key)
+		{
+			PreKeyAction = db => db.Execute("PRAGMA cipher_default_use_hmac = OFF;"),
+			PostKeyAction = db => db.Execute("PRAGMA kdf_iter = 128000;")
+		};
 
-		var encryptedDb2 = new SQLiteConnection(options2);
+		using var encryptedDb2 = new SQLiteConnection(options2);
 	}
 
 	[Test]
