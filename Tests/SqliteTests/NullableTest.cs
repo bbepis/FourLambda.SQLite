@@ -214,7 +214,6 @@ public class NullableTest : DBTestHarness
 		Two = 2
 	}
 
-	[StoreAsText]
 	public enum TestTextEnum
 	{
 		Alpha,
@@ -227,6 +226,8 @@ public class NullableTest : DBTestHarness
 		public int ID { get; set; }
 
 		public TestIntEnum? NullableIntEnum { get; set; }
+
+		[StoreAsText]
 		public TestTextEnum? NullableTextEnum { get; set; }
 
 		public override bool Equals(object obj)

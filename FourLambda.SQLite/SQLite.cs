@@ -2775,7 +2775,7 @@ public class NotNullAttribute : Attribute
 {
 }
 
-[AttributeUsage(AttributeTargets.Enum | AttributeTargets.Property)]
+[AttributeUsage(AttributeTargets.Property)]
 public class StoreAsTextAttribute : Attribute
 {
 	/// <summary>
@@ -3106,61 +3106,6 @@ public class TableMapping
 	{
 		ByName,
 		ByPosition
-	}
-}
-
-class EnumCacheInfo
-{
-	public EnumCacheInfo(Type type)
-	{
-		var typeInfo = type.GetTypeInfo();
-
-		IsEnum = typeInfo.IsEnum;
-
-		if (IsEnum)
-		{
-			StoreAsText = typeInfo.CustomAttributes.Any(x => x.AttributeType == typeof(StoreAsTextAttribute));
-
-			if (StoreAsText)
-			{
-				EnumValues = new Dictionary<int, string>();
-				foreach (object e in Enum.GetValuesAsUnderlyingType(type))
-				{
-					EnumValues[Convert.ToInt32(e)] = Enum.ToObject(type, e).ToString();
-				}
-			}
-		}
-	}
-
-	public bool IsEnum { get; private set; }
-
-	public bool StoreAsText { get; private set; }
-
-	public Dictionary<int, string> EnumValues { get; private set; }
-}
-
-internal static class EnumCache
-{
-	static readonly Dictionary<Type, EnumCacheInfo> Cache = new Dictionary<Type, EnumCacheInfo>();
-
-	public static EnumCacheInfo GetInfo<T>()
-	{
-		return GetInfo(typeof(T));
-	}
-
-	public static EnumCacheInfo GetInfo(Type type)
-	{
-		lock (Cache)
-		{
-			EnumCacheInfo info = null;
-			if (!Cache.TryGetValue(type, out info))
-			{
-				info = new EnumCacheInfo(type);
-				Cache[type] = info;
-			}
-
-			return info;
-		}
 	}
 }
 
@@ -3708,14 +3653,11 @@ public partial class SQLiteCommand
 			{
 				// Now we could possibly get an enum, retrieve cached info
 				var valueType = value.GetType();
-				var enumInfo = EnumCache.GetInfo(valueType);
-				if (enumInfo.IsEnum)
+
+				if (valueType.IsEnum)
 				{
-					var enumIntValue = Convert.ToInt32(value);
-					if (enumInfo.StoreAsText)
-						SQLite3.BindText(stmt, index, enumInfo.EnumValues[enumIntValue], -1, NegativePointer);
-					else
-						SQLite3.BindInt(stmt, index, enumIntValue);
+					var enumIntValue = Convert.ToInt64(value);
+					SQLite3.BindInt64(stmt, index, enumIntValue);
 				}
 				else
 				{

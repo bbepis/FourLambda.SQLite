@@ -10,14 +10,6 @@ public class EnumTests : DBTestHarness
 		Value3
 	}
 
-	[StoreAsText]
-	public enum StringTestEnum
-	{
-		Value1,
-		Value2,
-		Value3
-	}
-
 	public class TestObj
 	{
 		[PrimaryKey]
@@ -33,7 +25,8 @@ public class EnumTests : DBTestHarness
 		[PrimaryKey]
 		public int Id { get; set; }
 
-		public StringTestEnum Value { get; set; }
+		[StoreAsText]
+		public TestEnum Value { get; set; }
 
 		public override string ToString() => $"[StringTestObj: Id={Id}, Value={Value}]";
 	}
@@ -68,8 +61,8 @@ public class EnumTests : DBTestHarness
 	[Test]
 	public void ShouldPersistAndReadStringEnum()
 	{
-		var obj1 = new StringTestObj { Id = 1, Value = StringTestEnum.Value2 };
-		var obj2 = new StringTestObj { Id = 2, Value = StringTestEnum.Value3 };
+		var obj1 = new StringTestObj { Id = 1, Value = TestEnum.Value2 };
+		var obj2 = new StringTestObj { Id = 2, Value = TestEnum.Value3 };
 
 		var numIn1 = Database.Insert(obj1);
 		var numIn2 = Database.Insert(obj2);
