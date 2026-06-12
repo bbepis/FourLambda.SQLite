@@ -3544,8 +3544,15 @@ public partial class SQLiteCommand
 
 	static IntPtr NegativePointer = new IntPtr(-1);
 
-	internal static void BindParameter(Sqlite3Statement stmt, int index, object value)
+	internal static void BindParameter(Sqlite3Statement stmt, int index, object? value)
 	{
+		QueryArgument? queryArgument = value as QueryArgument;
+
+		if (queryArgument != null)
+		{ 
+			value = queryArgument!.Value;
+		}
+
 		if (value == null)
 		{
 			SQLite3.BindNull(stmt, index);
@@ -3576,17 +3583,41 @@ public partial class SQLiteCommand
 			{
 				SQLite3.BindDouble(stmt, index, Convert.ToDouble(value));
 			}
-			else if (value is TimeSpan)
+			else if (value is TimeSpan timespanValue)
 			{
-				SQLite3.BindInt64(stmt, index, ((TimeSpan)value).Ticks);
+				string? stringFormat = null;
+
+				if (queryArgument?.AgainstColumn?.StoreAsText == true)
+					stringFormat = queryArgument.AgainstColumn.StoreAsTextFormat ?? "c";
+
+				if (stringFormat != null)
+					SQLite3.BindText(stmt, index, timespanValue.ToString(stringFormat), -1, NegativePointer);
+				else
+					SQLite3.BindInt64(stmt, index, timespanValue.Ticks);
 			}
-			else if (value is DateTime)
+			else if (value is DateTime datetimeValue)
 			{
-				SQLite3.BindInt64(stmt, index, ((DateTime)value).Ticks);
+				string? stringFormat = null;
+
+				if (queryArgument?.AgainstColumn?.StoreAsText == true)
+					stringFormat = queryArgument.AgainstColumn.StoreAsTextFormat ?? "o";
+
+				if (stringFormat != null)
+					SQLite3.BindText(stmt, index, datetimeValue.ToString(stringFormat), -1, NegativePointer);
+				else
+					SQLite3.BindInt64(stmt, index, datetimeValue.Ticks);
 			}
-			else if (value is DateTimeOffset)
+			else if (value is DateTimeOffset datetimeOffsetValue)
 			{
-				SQLite3.BindInt64(stmt, index, ((DateTimeOffset)value).UtcTicks);
+				string? stringFormat = null;
+
+				if (queryArgument?.AgainstColumn?.StoreAsText == true)
+					stringFormat = queryArgument.AgainstColumn.StoreAsTextFormat ?? "o";
+
+				if (stringFormat != null)
+					SQLite3.BindText(stmt, index, datetimeOffsetValue.ToString(stringFormat), -1, NegativePointer);
+				else
+					SQLite3.BindInt64(stmt, index, datetimeOffsetValue.UtcTicks);
 			}
 			else if (value is byte[])
 			{
@@ -3707,7 +3738,19 @@ public partial class SQLiteCommand
 			}
 			else if (clrType == typeof(DateTimeOffset))
 			{
-				return new DateTimeOffset(SQLite3.ColumnInt64(stmt, index), TimeSpan.Zero);
+				if (type == SQLite3.ColType.Integer)
+				{
+					return new DateTimeOffset(SQLite3.ColumnInt64(stmt, index), TimeSpan.Zero);
+				}
+				else
+				{
+					var text = SQLite3.ColumnString(stmt, index);
+
+					if (column?.StoreAsTextFormat != null && DateTimeOffset.TryParseExact(text, column.StoreAsTextFormat, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var resultTime))
+						return resultTime;
+
+					return DateTimeOffset.Parse(text);
+				}
 			}
 			else if (clrTypeInfo.IsEnum)
 			{
@@ -3902,9 +3945,23 @@ internal class FastColumnSetter
 		}
 		else if (clrType == typeof(DateTimeOffset))
 		{
-			fastSetter = CreateNullableTypedSetterDelegate<T, DateTimeOffset>(column, (stmt, index) => {
-				return new DateTimeOffset(SQLite3.ColumnInt64(stmt, index), TimeSpan.Zero);
-			});
+			if (!column.StoreAsText)
+			{
+				fastSetter = CreateNullableTypedSetterDelegate<T, DateTimeOffset>(column, (stmt, index) => {
+					return new DateTimeOffset(SQLite3.ColumnInt64(stmt, index), TimeSpan.Zero);
+				});
+			}
+			else
+			{
+				fastSetter = CreateNullableTypedSetterDelegate<T, DateTimeOffset>(column, (stmt, index) => {
+					var text = SQLite3.ColumnString(stmt, index);
+
+					if (column.StoreAsTextFormat != null && DateTimeOffset.TryParseExact(text, column.StoreAsTextFormat, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var resultTime))
+						return resultTime;
+
+					return DateTimeOffset.Parse(text);
+				});
+			}
 		}
 		else if (clrTypeInfo.IsEnum)
 		{
@@ -4280,7 +4337,7 @@ public class TableQuery<
 			pred = pred != null ? Expression.AndAlso(pred, lambda.Body) : lambda.Body;
 		}
 
-		var args = new List<object>();
+		var args = new List<QueryArgument>();
 		var cmdText = "delete from \"" + Table.TableName + "\"";
 		var w = CompileExpr(pred, args);
 		cmdText += " where " + w.CommandText;
@@ -4451,7 +4508,7 @@ public class TableQuery<
 		else
 		{
 			var cmdText = "select " + selectionList + " from \"" + Table.TableName + "\"";
-			var args = new List<object>();
+			var args = new List<QueryArgument>();
 			if (_where != null)
 			{
 				var w = CompileExpr(_where, args);
@@ -4485,7 +4542,7 @@ public class TableQuery<
 		public object Value { get; set; }
 	}
 
-	private CompileResult CompileExpr(Expression expr, List<object> queryArgs)
+	private CompileResult CompileExpr(Expression expr, List<QueryArgument> queryArgs)
 	{
 		if (expr == null)
 		{
@@ -4516,7 +4573,22 @@ public class TableQuery<
 			else if (rightr.CommandText == "?" && rightr.Value == null)
 				text = CompileNullBinaryExpression(bin, leftr);
 			else
+			{
 				text = "(" + leftr.CommandText + " " + GetSqlName(bin) + " " + rightr.CommandText + ")";
+
+				PropertyInfo? againstColumnMember = null;
+				if (leftr.CommandText == "?" && bin.Right is MemberExpression member1)
+					againstColumnMember = member1.Member as PropertyInfo;
+				else if (rightr.CommandText == "?" && bin.Left is MemberExpression member2)
+					againstColumnMember = member2.Member as PropertyInfo;
+
+				if (againstColumnMember != null)
+				{
+					queryArgs[queryArgs.Count - 1].AgainstColumn = Table.Columns.FirstOrDefault(x =>
+						IsSameProperty(x.PropertyInfo, againstColumnMember));
+				}
+			}
+
 			return new CompileResult { CommandText = text };
 		}
 		else if (expr.NodeType == ExpressionType.Not)
@@ -4638,7 +4710,7 @@ public class TableQuery<
 		else if (expr.NodeType == ExpressionType.Constant)
 		{
 			var c = (ConstantExpression)expr;
-			queryArgs.Add(c.Value);
+			queryArgs.Add(new QueryArgument(c.Value));
 			return new CompileResult
 			{
 				CommandText = "?",
@@ -4693,6 +4765,7 @@ public class TableQuery<
 					{
 						queryArgs.RemoveAt(queryArgs.Count - 1);
 					}
+
 					obj = r.Value;
 				}
 
@@ -4719,14 +4792,14 @@ public class TableQuery<
 				//
 				// Work special magic for enumerables
 				//
-				if (val != null && val is System.Collections.IEnumerable && !(val is string) && !(val is System.Collections.Generic.IEnumerable<byte>))
+				if (val != null && val is IEnumerable && !(val is string) && !(val is IEnumerable<byte>))
 				{
-					var sb = new System.Text.StringBuilder();
+					var sb = new StringBuilder();
 					sb.Append("(");
 					var head = "";
-					foreach (var a in (System.Collections.IEnumerable)val)
+					foreach (var a in (IEnumerable)val)
 					{
-						queryArgs.Add(a);
+						queryArgs.Add(new QueryArgument(a));
 						sb.Append(head);
 						sb.Append("?");
 						head = ",";
@@ -4740,7 +4813,7 @@ public class TableQuery<
 				}
 				else
 				{
-					queryArgs.Add(val);
+					queryArgs.Add(new QueryArgument(val));
 					return new CompileResult
 					{
 						CommandText = "?",
@@ -4749,7 +4822,29 @@ public class TableQuery<
 				}
 			}
 		}
-		throw new NotSupportedException("Cannot compile: " + expr.NodeType.ToString());
+		throw new NotSupportedException("Cannot compile: " + expr.NodeType);
+	}
+
+	static bool IsSameProperty(PropertyInfo a, PropertyInfo b)
+	{
+		// basic check
+		if (a.DeclaringType == b.DeclaringType && a.Name == b.Name)
+			return true;
+
+		// Compare base definitions of the getter accessor
+		var get1 = a.GetGetMethod(true)?.GetBaseDefinition();
+		var get2 = b.GetGetMethod(true)?.GetBaseDefinition();
+
+		// If either getter is null, compare setter accessor definitions
+		if (get1 == null || get2 == null)
+		{
+			var set1 = a.GetSetMethod(true)?.GetBaseDefinition();
+			var set2 = b.GetSetMethod(true)?.GetBaseDefinition();
+
+			return set1 != null && set2 != null && set1 == set2;
+		}
+
+		return get1 == get2;
 	}
 
 	static object ConvertTo(object obj, Type t)
@@ -4914,6 +5009,12 @@ public class TableQuery<
 	{
 		return Where(predExpr).FirstOrDefault();
 	}
+}
+
+public class QueryArgument(object value)
+{
+	public TableMapping.Column? AgainstColumn { get; set; } = null;
+	public object? Value { get; set; } = value;
 }
 
 public static class SQLite3
