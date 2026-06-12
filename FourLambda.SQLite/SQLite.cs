@@ -3036,8 +3036,11 @@ public class TableMapping
 
 			if (explicitlyNull && IsPK)
 				throw new ArgumentException("A column marked as primary key cannot be nullable.");
+
+			if (explicitlyNull && Orm.IsMarkedNotNull(member))
+				throw new ArgumentException("A column cannot be marked as [NotNull] while having an explicitly nullable property type.");
 			
-			IsNullable = explicitlyNull || (createFlags.HasFlag(CreateFlags.ImplicitNullable) && !(IsPK || Orm.IsMarkedNotNull(member)));
+			IsNullable = explicitlyNull || ((createFlags.HasFlag(CreateFlags.ImplicitNullable) || nullabilityInfo.WriteState == NullabilityState.Unknown) && !(IsPK || Orm.IsMarkedNotNull(member)));
 			MaxStringLength = Orm.MaxStringLength(member);
 
 			SqliteType = Orm.SqlType(this);
