@@ -4665,6 +4665,10 @@ public class TableQuery<
 			{
 				sqlCall = "(" + args[0].CommandText + " is null or" + args[0].CommandText + " ='' )";
 			}
+			else if (call.Method.Name == "op_Implicit")
+			{
+				sqlCall = args[0].CommandText;
+			}
 			else
 			{
 				sqlCall = call.Method.Name.ToLower() + "(" + string.Join(",", args.Select(a => a.CommandText).ToArray()) + ")";
