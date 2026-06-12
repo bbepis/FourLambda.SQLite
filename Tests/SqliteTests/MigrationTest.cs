@@ -1,0 +1,105 @@
+namespace FourLambda.SQLite.Tests;
+
+[TestFixture]
+public class MigrationTest : DBTestHarness
+{
+	[Table ("Test")]
+	class LowerId {
+		public int Id { get; set; }
+	}
+
+	[Table ("Test")]
+	class UpperId {
+		public int ID { get; set; }
+	}
+
+	[Test]
+	public void UpperAndLowerColumnNames ()
+	{
+		Database.CreateTable<LowerId>();
+		Database.CreateTable<UpperId>();
+
+		var cols = Database.GetTableInfo ("Test").ToList ();
+		Assert.AreEqual (1, cols.Count);
+		Assert.AreEqual ("Id", cols[0].Name);
+	}
+
+	[Table ("TestAdd")]
+	class TestAddBefore
+	{
+		[PrimaryKey, AutoIncrement]
+		public int Id { get; set; }
+
+		public string Name { get; set; }
+	}
+
+	[Table ("TestAdd")]
+	class TestAddAfter
+	{
+		[PrimaryKey, AutoIncrement]
+		public int Id { get; set; }
+
+		public string Name { get; set; }
+
+		public int IntValue { get; set; }
+		public string StringValue { get; set; }
+	}
+
+	[Test]
+	public void AddColumns ()
+	{
+		//
+		// Init the Database
+		//
+		var path = GetDisposablePath();
+
+		using (var db = new SQLiteConnection(path) { Trace = true })
+		{
+			path = db.DatabasePath;
+
+			db.CreateTable<TestAddBefore>();
+
+			var cols = db.GetTableInfo ("TestAdd");
+			Assert.AreEqual (2, cols.Count);
+
+			var o = new TestAddBefore {
+				Name = "Foo",
+			};
+
+			db.Insert (o);
+
+			var oo = db.Table<TestAddBefore>().First ();
+
+			Assert.AreEqual ("Foo", oo.Name);
+		}
+
+		//
+		// Migrate and use it
+		//
+		using (var db = new SQLiteConnection (path) { Trace = true })
+		{
+			db.CreateTable<TestAddAfter>();
+
+			var cols = db.GetTableInfo ("TestAdd");
+			Assert.AreEqual (4, cols.Count);
+
+			var oo = db.Table<TestAddAfter>().First ();
+
+			Assert.AreEqual ("Foo", oo.Name);
+			Assert.AreEqual (0, oo.IntValue);
+			Assert.AreEqual (null, oo.StringValue);
+
+			var o = new TestAddAfter {
+				Name = "Bar",
+				IntValue = 42,
+				StringValue = "Hello",
+			};
+			db.Insert (o);
+
+			var ooo = db.Get<TestAddAfter>(o.Id);
+			Assert.AreEqual ("Bar", ooo.Name);
+			Assert.AreEqual (42, ooo.IntValue);
+			Assert.AreEqual ("Hello", ooo.StringValue);
+		}
+	}
+}

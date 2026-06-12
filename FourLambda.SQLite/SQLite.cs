@@ -34,9 +34,11 @@ using Sqlite3DatabaseHandle = System.IntPtr;
 using Sqlite3BackupHandle = System.IntPtr;
 using Sqlite3Statement = System.IntPtr;
 
+[assembly: InternalsVisibleTo("Tests")]
+
 #pragma warning disable 1591 // XML Doc Comments
 
-namespace SQLite;
+namespace FourLambda.SQLite;
 
 public class SQLiteException : Exception
 {
@@ -3055,9 +3057,9 @@ public class TableMapping
 
 			return value switch
 			{
-				DateTime dateTime => dateTime.ToString(StoreAsTextFormat),
-				TimeSpan timeSpan => timeSpan.ToString(StoreAsTextFormat),
-				DateTimeOffset dateTimeOffset => dateTimeOffset.ToString(StoreAsTextFormat),
+				DateTime dateTime => dateTime.ToString(StoreAsTextFormat ?? "O"),
+				TimeSpan timeSpan => timeSpan.ToString(StoreAsTextFormat ?? "c"),
+				DateTimeOffset dateTimeOffset => dateTimeOffset.ToString(StoreAsTextFormat ?? "O"),
 				IFormattable formattable => formattable.ToString(StoreAsTextFormat, null),
 				_ => value
 			};
@@ -3111,7 +3113,7 @@ class EnumCacheInfo
 	public Dictionary<int, string> EnumValues { get; private set; }
 }
 
-static class EnumCache
+internal static class EnumCache
 {
 	static readonly Dictionary<Type, EnumCacheInfo> Cache = new Dictionary<Type, EnumCacheInfo>();
 

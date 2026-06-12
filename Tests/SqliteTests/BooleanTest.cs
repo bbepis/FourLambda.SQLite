@@ -1,0 +1,53 @@
+using System.Diagnostics;
+
+namespace FourLambda.SQLite.Tests;
+
+[TestFixture]
+public class BooleanTest
+{
+	public class VO
+	{
+		[AutoIncrement, PrimaryKey]
+		public int ID { get; set; }
+		public bool Flag { get; set; }
+		public string Text { get; set; }
+
+		public override string ToString()
+			=> $"VO:: ID:{ID} Flag:{Flag} Text:{Text}";
+	}
+
+	public class DbAcs(string path) : SQLiteConnection(path)
+	{
+		public void BuildTable()
+		{
+			CreateTable<VO>();
+		}
+
+		public int CountWithFlag(bool flag)
+		{
+			var cmd = CreateCommand("SELECT COUNT(*) FROM VO Where Flag = ?", flag);
+			return cmd.ExecuteScalar<int>();                
+		}
+	}
+        
+	[Test]
+	public void TestBoolean()
+	{
+		var db = new DbAcs(":memory:");         
+		db.BuildTable();
+		for (int i = 0; i < 10; i++)
+			db.Insert(new VO { Flag = (i % 3 == 0), Text = $"VO{i}" });                
+            
+		// count vo which flag is true            
+		Assert.AreEqual(4, db.CountWithFlag(true));
+		Assert.AreEqual(6, db.CountWithFlag(false));
+
+		Debug.WriteLine("VO with true flag:");
+		foreach (var vo in db.Query<VO>("SELECT * FROM VO Where Flag = ?", true))
+			Debug.WriteLine (vo.ToString ());
+
+		Debug.WriteLine ("VO with false flag:");
+		foreach (var vo in db.Query<VO>("SELECT * FROM VO Where Flag = ?", false))
+			Debug.WriteLine (vo.ToString ());
+	}
+}
