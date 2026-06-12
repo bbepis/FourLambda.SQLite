@@ -438,20 +438,26 @@ public partial class SQLiteConnection : ISQLiteConnection
 		BusyTimeout = TimeSpan.FromSeconds(1.0);
 		Tracer = line => Debug.WriteLine(line);
 
+		try
+		{
 		connectionString.PreKeyAction?.Invoke(this);
-		if (connectionString.Key is string stringKey)
+			if (connectionString.Key.StringKey != null)
 		{
-			SetKey(stringKey);
+				SetKey(connectionString.Key.StringKey);
 		}
-		else if (connectionString.Key is byte[] bytesKey)
+			else if (connectionString.Key.ByteKey != null)
 		{
-			SetKey(bytesKey);
+				SetKey(connectionString.Key.ByteKey);
 		}
-		else if (connectionString.Key != null)
+
+			connectionString.PostKeyAction?.Invoke(this);
+		}
+		catch
 		{
-			throw new InvalidOperationException("Encryption keys must be strings or byte arrays");
+			Dispose(false);
+
+			throw;
 		}
-		connectionString.PostKeyAction?.Invoke(this);
 	}
 
 	/// <summary>
@@ -499,7 +505,7 @@ public partial class SQLiteConnection : ISQLiteConnection
 	/// if your database is encrypted.
 	/// This only has an effect if you are using the SQLCipher nuget package.
 	/// </summary>
-	/// <param name="key">256-bit (32 byte) encryption key data</param>
+	/// <param name="key">256-bit (32 byte) or 48 bytes (384-bit) encryption key</param>
 	void SetKey(byte[] key)
 	{
 		if (key == null)
@@ -2557,13 +2563,35 @@ public enum NotifyTableChangedAction
 /// </summary>
 public class SQLiteConnectionString
 {
-	public string UniqueKey { get; }
+	/// <summary>
+	/// Specifies the path to the database file.
+	/// </summary>
 	public string DatabasePath { get; }
-	public object Key { get; }
-	public SQLiteOpenFlags OpenFlags { get; }
-	public Action<SQLiteConnection> PreKeyAction { get; }
-	public Action<SQLiteConnection> PostKeyAction { get; }
-	public string VfsName { get; }
+
+	/// <summary>
+	/// Specifies the encryption key to use on the database. Can be cast from a string or a byte[].
+	/// </summary>
+	public DatabaseKey Key { get; init; }
+
+	/// <summary>
+	/// Flags controlling how the connection should be opened.
+	/// </summary>
+	public SQLiteOpenFlags OpenFlags { get; init; }
+
+	/// <summary>
+	/// Executes prior to setting key for SQLCipher databases
+	/// </summary>
+	public Action<SQLiteConnection>? PreKeyAction { get; init; }
+
+	/// <summary>
+	/// Executes after setting key for SQLCipher databases
+	/// </summary>
+	public Action<SQLiteConnection>? PostKeyAction { get; init; }
+
+	/// <summary>
+	/// Specifies the Virtual File System to use on the database.
+	/// </summary>
+	public string? VfsName { get; init; }
 
 	/// <summary>
 	/// Constructs a new SQLiteConnectionString with all the data needed to open an SQLiteConnection.
@@ -2583,19 +2611,10 @@ public class SQLiteConnectionString
 	/// Specifies the path to the database file.
 	/// </param>
 	/// <param name="key">
-	/// Specifies the encryption key to use on the database. Should be a string or a byte[].
+	/// Specifies the encryption key to use on the database. Can be cast from a string or a byte[].
 	/// </param>
-	/// <param name="preKeyAction">
-	/// Executes prior to setting key for SQLCipher databases
-	/// </param>
-	/// <param name="postKeyAction">
-	/// Executes after setting key for SQLCipher databases
-	/// </param>
-	/// <param name="vfsName">
-	/// Specifies the Virtual File System to use on the database.
-	/// </param>
-	public SQLiteConnectionString(string databasePath, object key = null, Action<SQLiteConnection> preKeyAction = null, Action<SQLiteConnection> postKeyAction = null, string vfsName = null)
-		: this(databasePath, SQLiteOpenFlags.Create | SQLiteOpenFlags.ReadWrite, key, preKeyAction, postKeyAction, vfsName)
+	public SQLiteConnectionString(string databasePath, DatabaseKey key)
+		: this(databasePath, SQLiteOpenFlags.Create | SQLiteOpenFlags.ReadWrite, key)
 	{
 	}
 
@@ -2609,31 +2628,38 @@ public class SQLiteConnectionString
 	/// Flags controlling how the connection should be opened.
 	/// </param>
 	/// <param name="key">
-	/// Specifies the encryption key to use on the database. Should be a string or a byte[].
+	/// Specifies the encryption key to use on the database. Can be cast from a string or a byte[].
 	/// </param>
-	/// <param name="preKeyAction">
-	/// Executes prior to setting key for SQLCipher databases
-	/// </param>
-	/// <param name="postKeyAction">
-	/// Executes after setting key for SQLCipher databases
-	/// </param>
-	/// <param name="vfsName">
-	/// Specifies the Virtual File System to use on the database.
-	/// </param>
-	public SQLiteConnectionString(string databasePath, SQLiteOpenFlags openFlags, object key = null, Action<SQLiteConnection> preKeyAction = null, Action<SQLiteConnection> postKeyAction = null, string vfsName = null)
+	public SQLiteConnectionString(string databasePath, SQLiteOpenFlags openFlags, DatabaseKey key = default)
 	{
-		if (key != null && !((key is byte[]) || (key is string)))
-			throw new ArgumentException("Encryption keys must be strings or byte arrays", nameof(key));
-
-		UniqueKey = string.Format("{0}_{1:X8}", databasePath, (uint)openFlags);
 		Key = key;
-		PreKeyAction = preKeyAction;
-		PostKeyAction = postKeyAction;
 		OpenFlags = openFlags;
-		VfsName = vfsName;
 
 		DatabasePath = databasePath;
 	}
+}
+
+/// <summary>
+/// Represents a key that can be used to encrypt/decrypt a database.
+/// </summary>
+public struct DatabaseKey
+{
+	public string? StringKey { get; }
+	public byte[]? ByteKey { get; }
+
+	public DatabaseKey(string key)
+	{
+		StringKey = key;
+	}
+
+	/// <param name="key">Key must be 32 bytes (256-bit) or 48 bytes (384-bit).</param>
+	public DatabaseKey(byte[] key)
+	{
+		ByteKey = key;
+	}
+
+	public static implicit operator DatabaseKey(string key) => new(key);
+	public static implicit operator DatabaseKey(byte[] key) => new(key);
 }
 
 [AttributeUsage(AttributeTargets.Class)]
