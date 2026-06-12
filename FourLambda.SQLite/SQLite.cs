@@ -431,7 +431,7 @@ public partial class SQLiteConnection : ISQLiteConnection
 		Handle = handle;
 		if (r != SQLite3.Result.OK)
 		{
-			throw SQLiteException.New(r, String.Format("Could not open database file: {0} ({1})", DatabasePath, r));
+			throw SQLiteException.New(r, string.Format("Could not open database file: {0} ({1})", DatabasePath, r));
 		}
 		_open = true;
 
@@ -440,15 +440,15 @@ public partial class SQLiteConnection : ISQLiteConnection
 
 		try
 		{
-		connectionString.PreKeyAction?.Invoke(this);
+			connectionString.PreKeyAction?.Invoke(this);
 			if (connectionString.Key.StringKey != null)
-		{
+			{
 				SetKey(connectionString.Key.StringKey);
-		}
+			}
 			else if (connectionString.Key.ByteKey != null)
-		{
+			{
 				SetKey(connectionString.Key.ByteKey);
-		}
+			}
 
 			connectionString.PostKeyAction?.Invoke(this);
 		}
@@ -512,7 +512,7 @@ public partial class SQLiteConnection : ISQLiteConnection
 			throw new ArgumentNullException(nameof(key));
 		if (key.Length != 32 && key.Length != 48)
 			throw new ArgumentException("Key must be 32 bytes (256-bit) or 48 bytes (384-bit)", nameof(key));
-		var s = String.Join("", key.Select(x => x.ToString("X2")));
+		var s = string.Join("", key.Select(x => x.ToString("X2")));
 		ExecuteScalar<string>("pragma key = \"x'" + s + "'\"");
 	}
 
@@ -538,7 +538,7 @@ public partial class SQLiteConnection : ISQLiteConnection
 			throw new ArgumentNullException(nameof(key));
 		if (key.Length != 32 && key.Length != 48)
 			throw new ArgumentException("Key must be 32 bytes (256-bit) or 48 bytes (384-bit)", nameof(key));
-		var s = String.Join("", key.Select(x => x.ToString("X2")));
+		var s = string.Join("", key.Select(x => x.ToString("X2")));
 		ExecuteScalar<string>("pragma rekey = \"x'" + s + "'\"");
 	}
 
@@ -938,7 +938,7 @@ public partial class SQLiteConnection : ISQLiteConnection
 	public int CreateIndex(string indexName, string tableName, string[] columnNames, bool unique = false)
 	{
 		const string sqlFormat = "create {2} index if not exists \"{3}\" on \"{0}\"(\"{1}\")";
-		var sql = String.Format(sqlFormat, tableName, string.Join("\", \"", columnNames), unique ? "unique" : "", indexName);
+		var sql = string.Format(sqlFormat, tableName, string.Join("\", \"", columnNames), unique ? "unique" : "", indexName);
 		return Execute(sql);
 	}
 
@@ -1222,7 +1222,7 @@ public partial class SQLiteConnection : ISQLiteConnection
 		{
 			_sw.Stop();
 			_elapsedMilliseconds += _sw.ElapsedMilliseconds;
-			Tracer?.Invoke(string.Format("Finished in {0} ms ({1:0.0} s total)", _sw.ElapsedMilliseconds, _elapsedMilliseconds / 1000.0));
+			Tracer?.Invoke($"Finished in {_sw.ElapsedMilliseconds} ms ({_elapsedMilliseconds / 1000.0:0.0} s total)");
 		}
 
 		return r;
@@ -1689,7 +1689,7 @@ public partial class SQLiteConnection : ISQLiteConnection
 		//    and leaves the transaction stack empty.
 		try
 		{
-			if (String.IsNullOrEmpty(savepoint))
+			if (string.IsNullOrEmpty(savepoint))
 			{
 				if (Interlocked.Exchange(ref _transactionDepth, 0) > 0)
 				{
@@ -3183,7 +3183,7 @@ public static class Orm
 	{
 		var clrType = p.ColumnType;
 
-		if (clrType == typeof(Boolean) || clrType == typeof(Byte) || clrType == typeof(UInt16) || clrType == typeof(SByte) || clrType == typeof(Int16) || clrType == typeof(Int32) || clrType == typeof(UInt32) || clrType == typeof(Int64) || clrType == typeof(UInt64))
+		if (clrType == typeof(bool) || clrType == typeof(Byte) || clrType == typeof(UInt16) || clrType == typeof(SByte) || clrType == typeof(Int16) || clrType == typeof(Int32) || clrType == typeof(UInt32) || clrType == typeof(Int64) || clrType == typeof(UInt64))
 		{
 			return SqliteCellType.Integer;
 		}
@@ -3191,7 +3191,7 @@ public static class Orm
 		{
 			return SqliteCellType.Real;
 		}
-		else if (clrType == typeof(String) || clrType == typeof(StringBuilder) || clrType == typeof(Uri) || clrType == typeof(UriBuilder))
+		else if (clrType == typeof(string) || clrType == typeof(StringBuilder) || clrType == typeof(Uri) || clrType == typeof(UriBuilder))
 		{
 			return SqliteCellType.Text;
 		}
@@ -3213,7 +3213,7 @@ public static class Orm
 			// TODO: add StoreAsText for blob
 			return SqliteCellType.Text;
 		}
-		else if (clrType == typeof(Object))
+		else if (clrType == typeof(object))
 		{
 			return SqliteCellType.Any;
 		}
@@ -3600,7 +3600,7 @@ public partial class SQLiteCommand
 			{
 				SQLite3.BindInt(stmt, index, (int)value);
 			}
-			else if (value is String)
+			else if (value is string)
 			{
 				SQLite3.BindText(stmt, index, (string)value, -1, NegativePointer);
 			}
@@ -3608,7 +3608,7 @@ public partial class SQLiteCommand
 			{
 				SQLite3.BindInt(stmt, index, Convert.ToInt32(value));
 			}
-			else if (value is Boolean)
+			else if (value is bool)
 			{
 				SQLite3.BindInt(stmt, index, (bool)value ? 1 : 0);
 			}
@@ -3694,7 +3694,7 @@ public partial class SQLiteCommand
 				clrTypeInfo = clrType.GetTypeInfo();
 			}
 
-			if (clrType == typeof(String))
+			if (clrType == typeof(string))
 			{
 				return SQLite3.ColumnString(stmt, index);
 			}
@@ -3702,7 +3702,7 @@ public partial class SQLiteCommand
 			{
 				return (int)SQLite3.ColumnInt(stmt, index);
 			}
-			else if (clrType == typeof(Boolean))
+			else if (clrType == typeof(bool))
 			{
 				return SQLite3.ColumnInt(stmt, index) == 1;
 			}
@@ -3870,7 +3870,7 @@ internal class FastColumnSetter
 			clrTypeInfo = clrType.GetTypeInfo();
 		}
 
-		if (clrType == typeof(String))
+		if (clrType == typeof(string))
 		{
 			fastSetter = CreateTypedSetterDelegate<T, string>(column, (stmt, index) => {
 				return SQLite3.ColumnString(stmt, index);
@@ -3882,7 +3882,7 @@ internal class FastColumnSetter
 				return SQLite3.ColumnInt(stmt, index);
 			});
 		}
-		else if (clrType == typeof(Boolean))
+		else if (clrType == typeof(bool))
 		{
 			fastSetter = CreateNullableTypedSetterDelegate<T, bool>(column, (stmt, index) => {
 				return SQLite3.ColumnInt(stmt, index) == 1;
