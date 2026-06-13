@@ -2956,9 +2956,17 @@ public class TableMapping
 
 		public int? MaxStringLength { get; private set; }
 
-		public bool StoreAsText { get; private set; }
+		public bool StoreAsText
+		{
+			get;
+			set
+			{
+				field = value;
+				SqliteType = Orm.SqlType(this);
+			}
+		}
 
-		public string? StoreAsTextFormat { get; private set; }
+		public string? StoreAsTextFormat { get; set; }
 
 		public Column(PropertyInfo propertyInfo, CreateFlags createFlags = CreateFlags.None)
 		{
@@ -2967,15 +2975,15 @@ public class TableMapping
 
 			var colAttr = propertyInfo.GetCustomAttribute<ColumnAttribute>();
 
-			var memberStoreAsTextAttr = propertyInfo.GetCustomAttribute<StoreAsTextAttribute>();
-			StoreAsText = memberStoreAsTextAttr != null || memberType.GetCustomAttribute<StoreAsTextAttribute>() != null;
-			StoreAsTextFormat = memberStoreAsTextAttr?.Format;
-
 			Name = colAttr?.Name ?? propertyInfo.Name;
 
 			//If this type is Nullable<T> then Nullable.GetUnderlyingType returns the T, otherwise it returns null, so get the actual type instead
 			ColumnType = Nullable.GetUnderlyingType(memberType) ?? memberType;
 			Collation = Orm.Collation(propertyInfo);
+
+			var memberStoreAsTextAttr = propertyInfo.GetCustomAttribute<StoreAsTextAttribute>();
+			StoreAsText = memberStoreAsTextAttr != null || memberType.GetCustomAttribute<StoreAsTextAttribute>() != null;
+			StoreAsTextFormat = memberStoreAsTextAttr?.Format;
 
 			PKOrder = Orm.PKOrder(propertyInfo);
 
@@ -3027,6 +3035,8 @@ public class TableMapping
 				DateTime dateTime => dateTime.ToString(StoreAsTextFormat ?? "O"),
 				TimeSpan timeSpan => timeSpan.ToString(StoreAsTextFormat ?? "c"),
 				DateTimeOffset dateTimeOffset => dateTimeOffset.ToString(StoreAsTextFormat ?? "O"),
+				DateOnly dateOnly => dateOnly.ToString(StoreAsTextFormat ?? "O"),
+				TimeOnly timeOnly => timeOnly.ToString(StoreAsTextFormat ?? "O"),
 				IFormattable formattable => formattable.ToString(StoreAsTextFormat, null),
 				_ => value
 			};
@@ -3123,14 +3133,9 @@ public static class Orm
 		{
 			return SqliteCellType.Text;
 		}
-		else if (clrType == typeof(TimeSpan) || clrType == typeof(DateTime) || clrType.GetTypeInfo().IsEnum)
+		else if (clrType == typeof(TimeSpan) || clrType == typeof(DateTime) || clrType == typeof(DateTimeOffset) || clrType == typeof(TimeOnly) || clrType == typeof(DateOnly) || clrType.GetTypeInfo().IsEnum)
 		{
 			return p.StoreAsText ? SqliteCellType.Text : SqliteCellType.Integer;
-		}
-		else if (clrType == typeof(DateTimeOffset))
-		{
-			// TODO: add this to above
-			return SqliteCellType.Integer;
 		}
 		else if (clrType == typeof(byte[]))
 		{
@@ -3147,7 +3152,7 @@ public static class Orm
 		}
 		else
 		{
-			throw new NotSupportedException("Don't know about " + clrType);
+			throw new NotSupportedException("Unable to handle column type " + clrType);
 		}
 	}
 
@@ -3619,6 +3624,30 @@ public partial class SQLiteCommand
 				else
 					SQLite3.BindInt64(stmt, index, datetimeOffsetValue.UtcTicks);
 			}
+			else if (value is DateOnly dateOnlyValue)
+			{
+				string? stringFormat = null;
+
+				if (queryArgument?.AgainstColumn?.StoreAsText == true)
+					stringFormat = queryArgument.AgainstColumn.StoreAsTextFormat ?? "o";
+
+				if (stringFormat != null)
+					SQLite3.BindText(stmt, index, dateOnlyValue.ToString(stringFormat), -1, NegativePointer);
+				else
+					SQLite3.BindInt64(stmt, index, dateOnlyValue.ToDateTime(TimeOnly.MinValue).Ticks);
+			}
+			else if (value is TimeOnly timeOnlyValue)
+			{
+				string? stringFormat = null;
+
+				if (queryArgument?.AgainstColumn?.StoreAsText == true)
+					stringFormat = queryArgument.AgainstColumn.StoreAsTextFormat ?? "o";
+
+				if (stringFormat != null)
+					SQLite3.BindText(stmt, index, timeOnlyValue.ToString(stringFormat), -1, NegativePointer);
+				else
+					SQLite3.BindInt64(stmt, index, timeOnlyValue.Ticks);
+			}
 			else if (value is byte[])
 			{
 				SQLite3.BindBlob(stmt, index, (byte[])value, ((byte[])value).Length, NegativePointer);
@@ -3750,6 +3779,38 @@ public partial class SQLiteCommand
 						return resultTime;
 
 					return DateTimeOffset.Parse(text);
+				}
+			}
+			else if (clrType == typeof(DateOnly))
+			{
+				if (type == SQLite3.ColType.Integer)
+				{
+					return DateOnly.FromDateTime(new DateTime(SQLite3.ColumnInt64(stmt, index)));
+				}
+				else
+				{
+					var text = SQLite3.ColumnString(stmt, index);
+
+					if (column?.StoreAsTextFormat != null && DateOnly.TryParseExact(text, column.StoreAsTextFormat, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var resultTime))
+						return resultTime;
+
+					return DateOnly.Parse(text);
+				}
+			}
+			else if (clrType == typeof(TimeOnly))
+			{
+				if (type == SQLite3.ColType.Integer)
+				{
+					return new TimeOnly(SQLite3.ColumnInt64(stmt, index));
+				}
+				else
+				{
+					var text = SQLite3.ColumnString(stmt, index);
+
+					if (column?.StoreAsTextFormat != null && TimeOnly.TryParseExact(text, column.StoreAsTextFormat, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var resultTime))
+						return resultTime;
+
+					return TimeOnly.Parse(text);
 				}
 			}
 			else if (clrTypeInfo.IsEnum)
@@ -3960,6 +4021,46 @@ internal class FastColumnSetter
 						return resultTime;
 
 					return DateTimeOffset.Parse(text);
+				});
+			}
+		}
+		else if (clrType == typeof(DateOnly))
+		{
+			if (!column.StoreAsText)
+			{
+				fastSetter = CreateNullableTypedSetterDelegate<T, DateOnly>(column, (stmt, index) => {
+					return DateOnly.FromDateTime(new DateTime(SQLite3.ColumnInt64(stmt, index)));
+				});
+			}
+			else
+			{
+				fastSetter = CreateNullableTypedSetterDelegate<T, DateOnly>(column, (stmt, index) => {
+					var text = SQLite3.ColumnString(stmt, index);
+
+					if (column.StoreAsTextFormat != null && DateOnly.TryParseExact(text, column.StoreAsTextFormat, CultureInfo.InvariantCulture, DateTimeStyles.None, out var resultTime))
+						return resultTime;
+
+					return DateOnly.Parse(text);
+				});
+			}
+		}
+		else if (clrType == typeof(TimeOnly))
+		{
+			if (!column.StoreAsText)
+			{
+				fastSetter = CreateNullableTypedSetterDelegate<T, TimeOnly>(column, (stmt, index) => {
+					return new TimeOnly(SQLite3.ColumnInt64(stmt, index));
+				});
+			}
+			else
+			{
+				fastSetter = CreateNullableTypedSetterDelegate<T, TimeOnly>(column, (stmt, index) => {
+					var text = SQLite3.ColumnString(stmt, index);
+
+					if (column.StoreAsTextFormat != null && TimeOnly.TryParseExact(text, column.StoreAsTextFormat, CultureInfo.InvariantCulture, DateTimeStyles.None, out var resultTime))
+						return resultTime;
+
+					return TimeOnly.Parse(text);
 				});
 			}
 		}

@@ -21,6 +21,61 @@ public abstract class BaseTemporalTest<TTemporalType> : DBTestHarness where TTem
 		public TTemporalType? ModifiedTime { get; set; }
 	}
 
+	private void TestWrite(TableMapping mapping, string expected)
+	{
+		if (mapping.Columns[1].StoreAsTextFormat == "custom")
+			mapping.Columns[1].StoreAsTextFormat = TestCustomFormat;
+
+		Database.CreateTable(mapping);
+
+		var o = new TemporalClass
+		{
+			ModifiedTime = TestedValue
+		};
+
+		Database.Insert(o, "", mapping);
+
+		var o2 = Database.Get<TemporalClass>(o.Id, mapping);
+		Assert.AreEqual(o.ModifiedTime, o2.ModifiedTime);
+
+		var stored = Database.ExecuteScalar<string>("SELECT ModifiedTime FROM TestObj;");
+		Assert.AreEqual(expected, stored);
+	}
+
+	private Expression<Func<TemporalClass, bool>> BuildPredicate(bool isGreaterThan)
+	{
+		var param = Expression.Parameter(typeof(TemporalClass), "x");
+		var prop = Expression.Property(param, nameof(TemporalClass.ModifiedTime)); // x.ModifiedTime
+
+		var constant = Expression.Constant((TTemporalType?)EpochValue, typeof(TTemporalType?));
+
+		var binaryExpression = isGreaterThan
+			? Expression.GreaterThan(prop, constant)
+			: Expression.Equal(prop, constant);
+
+		return Expression.Lambda<Func<TemporalClass, bool>>(binaryExpression, param);
+	}
+
+	private void InternalLinqNullableTest(TableMapping map)
+	{
+		Database.CreateTable(map);
+
+		foreach (var time in NullableTestValues)
+			Database.Insert(new TemporalClass { ModifiedTime = time }, "", map);
+
+		var stored = Database.QueryScalars<string>("SELECT ModifiedTime FROM TestObj;").ToList();
+
+		// workaround for not being able to use == or > expressions in generic parameter types
+
+		// x => x.ModifiedTime == EpochValue
+		var res = Database.Table<TemporalClass>(map).Where(BuildPredicate(false)).ToList();
+		Assert.AreEqual(1, res.Count);
+
+		// x => x.ModifiedTime > EpochValue
+		res = Database.Table<TemporalClass>(map).Where(BuildPredicate(true)).ToList();
+		Assert.AreEqual(2, res.Count);
+	}
+
 	[Test]
 	public void TestWriteAsTicks()
 	{
@@ -48,78 +103,21 @@ public abstract class BaseTemporalTest<TTemporalType> : DBTestHarness where TTem
 		TestWrite(customStringMapping, TestedValue.ToString(TestCustomFormat, null));
 	}
 
-	private void TestWrite(TableMapping mapping, string expected)
+	[Test]
+	public void LinqNullableTestAsTicks()
 	{
-		if (mapping.Columns[1].StoreAsTextFormat == "custom")
-			mapping.Columns[1].StoreAsTextFormat = TestCustomFormat;
-
-		Database.CreateTable(mapping);
-
-		var o = new TemporalClass
-		{
-			ModifiedTime = TestedValue
-		};
-
-		Database.Insert(o, "", mapping);
-
-		var o2 = Database.Get<TemporalClass>(o.Id, mapping);
-		Assert.AreEqual(o.ModifiedTime, o2.ModifiedTime);
-
-		var stored = Database.ExecuteScalar<string>("SELECT ModifiedTime FROM TestObj;");
-		Assert.AreEqual(expected, stored);
+		InternalLinqNullableTest(new TableMapping(typeof(TemporalClass)));
 	}
 
-	private Expression<Func<TemporalClass, bool>> BuildPredicate(bool isGreaterThan)
+	[Test]
+	public void LinqNullableTestAsSortableString()
 	{
-		var param = Expression.Parameter(typeof(TemporalClass), "x");
-		var prop = Expression.Property(param, nameof(TemporalClass.ModifiedTime)); // x.ModifiedTime
+		var stringMapping = new TableMapping(typeof(TemporalClass));
+		var column = stringMapping.Columns.First(x => x.Name == nameof(TemporalClass.ModifiedTime));
+		column.StoreAsText = true;
 
-		var constant = Expression.Constant(EpochValue, typeof(TTemporalType));
-
-		var binaryExpression = isGreaterThan
-			? Expression.GreaterThan(prop, constant)
-			: Expression.Equal(prop, constant);
-
-		return Expression.Lambda<Func<TemporalClass, bool>>(binaryExpression, param);
+		InternalLinqNullableTest(stringMapping);
 	}
-
-	private void InternalLinqNullableTest(TableMapping map)
-	{
-		Database.CreateTable(map);
-
-		foreach (var time in NullableTestValues)
-			Database.Insert(new TemporalClass { ModifiedTime = time });
-
-		var stored = Database.QueryScalars<string>("SELECT ModifiedTime FROM TestObj;").ToList();
-
-		// workaround for not being able to use == or > expressions in generic parameter types
-
-		// x => x.ModifiedTime == EpochValue
-		var res = Database.Table<TemporalClass>().Where(BuildPredicate(false)).ToList();
-		Assert.AreEqual(1, res.Count);
-
-		// x => x.ModifiedTime > EpochValue
-		res = Database.Table<TemporalClass>().Where(BuildPredicate(true)).ToList();
-		Assert.AreEqual(2, res.Count);
-	}
-
-	//[Test]
-	//public void LinqNullableAsTicks()
-	//{
-	//	InternalLinqNullableTest<TemporalAsTicksClass>();
-	//}
-
-	//[Test]
-	//public void LinqNullableAsString()
-	//{
-	//	InternalLinqNullableTest<TemporalAsStringClass>();
-	//}
-
-	//[Test]
-	//public void LinqNullableAsFormattedString()
-	//{
-	//	InternalLinqNullableTest<TemporalAsStringFormattedClass>();
-	//}
 }
 
 [TestFixture]
@@ -180,7 +178,7 @@ public class TimeSpanTest : BaseTemporalTest<TimeSpan>
 public class DateOnlyTest : BaseTemporalTest<DateOnly>
 {
 	protected override string TestDefaultFormat => "o";
-	protected override string TestCustomFormat => @"yy.mm.dd";
+	protected override string TestCustomFormat => @"y.M.d";
 	protected override DateOnly TestedValue => new(2012, 1, 14);
 	protected override long TestedValueTicks => TestedValue.ToDateTime(TimeOnly.MinValue).Ticks;
 	protected override DateOnly EpochValue => new DateOnly(1970, 1, 1);
@@ -198,7 +196,7 @@ public class DateOnlyTest : BaseTemporalTest<DateOnly>
 public class TimeOnlyTest : BaseTemporalTest<TimeOnly>
 {
 	protected override string TestDefaultFormat => "o";
-	protected override string TestCustomFormat => @"hh.mm.ss";
+	protected override string TestCustomFormat => @"H.m.s";
 	protected override TimeOnly TestedValue => new(15, 1, 14);
 	protected override long TestedValueTicks => TestedValue.Ticks;
 	protected override TimeOnly EpochValue => TimeOnly.MinValue;
