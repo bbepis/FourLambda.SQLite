@@ -8,7 +8,7 @@ public class CreateTableTest : DBTestHarness
 	[Test]
 	public void CreateTypeWithNoProps()
 	{
-		Assert.Throws<Exception>(() => Database.CreateTable<NoPropObject>());
+		Assert.Throws<ArgumentException>(() => Database.CreateTable<NoPropObject>());
 	}
 
 	[Test]

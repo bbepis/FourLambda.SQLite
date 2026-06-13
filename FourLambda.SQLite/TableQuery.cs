@@ -788,6 +788,6 @@ public class TableQuery<
 
 public class QueryArgument(object value)
 {
-	public TableMapping.Column? AgainstColumn { get; set; } = null;
+	public TableColumn AgainstColumn { get; set; } = null;
 	public object? Value { get; set; } = value;
 }

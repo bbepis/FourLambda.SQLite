@@ -2,25 +2,17 @@ using System.Runtime.CompilerServices;
 
 namespace FourLambda.SQLite;
 
-public partial class SQLiteCommand
+public class SQLiteCommand(SQLiteConnection conn)
 {
-	SQLiteConnection _conn;
-	private List<Binding> _bindings;
+	private readonly List<Binding> _bindings = new();
 
-	public string CommandText { get; set; }
-
-	public SQLiteCommand(SQLiteConnection conn)
-	{
-		_conn = conn;
-		_bindings = new List<Binding>();
-		CommandText = "";
-	}
+	public string CommandText { get; set; } = "";
 
 	public int ExecuteNonQuery()
 	{
-		if (_conn.Trace)
+		if (conn.Trace)
 		{
-			_conn.Tracer?.Invoke("Executing: " + this);
+			conn.Tracer?.Invoke("Executing: " + this);
 		}
 
 		var r = SQLite3Native.Result.OK;
@@ -29,23 +21,23 @@ public partial class SQLiteCommand
 		Finalize(stmt);
 		if (r == SQLite3Native.Result.Done)
 		{
-			int rowsAffected = SQLite3Native.Changes(_conn.Handle);
+			int rowsAffected = SQLite3Native.Changes(conn.Handle);
 			return rowsAffected;
 		}
 		else if (r == SQLite3Native.Result.Error)
 		{
-			string msg = SQLite3Native.GetErrmsg(_conn.Handle);
+			string msg = SQLite3Native.GetErrmsg(conn.Handle);
 			throw SQLiteException.New(r, msg);
 		}
 		else if (r == SQLite3Native.Result.Constraint)
 		{
-			if (SQLite3Native.ExtendedErrCode(_conn.Handle) == SQLite3Native.ExtendedResult.ConstraintNotNull)
+			if (SQLite3Native.ExtendedErrCode(conn.Handle) == SQLite3Native.ExtendedResult.ConstraintNotNull)
 			{
-				throw NotNullConstraintViolationException.New(r, SQLite3Native.GetErrmsg(_conn.Handle));
+				throw NotNullConstraintViolationException.New(r, SQLite3Native.GetErrmsg(conn.Handle));
 			}
 		}
 
-		throw SQLiteException.New(r, SQLite3Native.GetErrmsg(_conn.Handle));
+		throw SQLiteException.New(r, SQLite3Native.GetErrmsg(conn.Handle));
 	}
 
 	public IEnumerable<T> ExecuteDeferredQuery<
@@ -55,7 +47,7 @@ public partial class SQLiteCommand
 		if (typeof(T).Name.StartsWith("ValueTuple`"))
 			return ExecuteDeferredQueryAsValueTuple<T>();
 
-		return ExecuteDeferredQuery<T>(_conn.GetMapping(typeof(T)));
+		return ExecuteDeferredQuery<T>(conn.GetMapping(typeof(T)));
 	}
 
 	public List<T> ExecuteQuery<
@@ -65,7 +57,7 @@ public partial class SQLiteCommand
 		if (typeof(T).Name.StartsWith("ValueTuple`"))
 			return ExecuteDeferredQueryAsValueTuple<T>().ToList();
 
-		return ExecuteDeferredQuery<T>(_conn.GetMapping(typeof(T))).ToList();
+		return ExecuteDeferredQuery<T>(conn.GetMapping(typeof(T))).ToList();
 	}
 
 	public List<T> ExecuteQuery<T>(TableMapping map)
@@ -76,60 +68,53 @@ public partial class SQLiteCommand
 
 	public IEnumerable<T> ExecuteDeferredQuery<T>(TableMapping map)
 	{
-		if (_conn.Trace)
+		if (conn.Trace)
 		{
-			_conn.Tracer?.Invoke("Executing Query: " + this);
+			conn.Tracer?.Invoke("Executing Query: " + this);
 		}
 
 		var stmt = Prepare();
 		try
 		{
-			var cols = new TableMapping.Column[SQLite3Native.ColumnCount(stmt)];
+			var cols = new TableColumn[SQLite3Native.ColumnCount(stmt)];
 			var fastColumnSetters = new Action<object, Sqlite3Statement, int>[SQLite3Native.ColumnCount(stmt)];
 
-			if (map.Method == TableMapping.MapMethod.ByPosition)
+			MethodInfo getSetter = null;
+			if (typeof(T) != map.MappedType)
 			{
-				Array.Copy(map.Columns, cols, Math.Min(cols.Length, map.Columns.Length));
-			}
-			else if (map.Method == TableMapping.MapMethod.ByName)
-			{
-				MethodInfo getSetter = null;
-				if (typeof(T) != map.MappedType)
+				// The runtime feature switch must be on a separate 'if' branch on its own,
+				// or the analyzer might not be able to correctly follow the program flow.
+				if (!RuntimeFeature.IsDynamicCodeSupported)
 				{
-					// The runtime feature switch must be on a separate 'if' branch on its own,
-					// or the analyzer might not be able to correctly follow the program flow.
-					if (!RuntimeFeature.IsDynamicCodeSupported)
+					if (map.MappedType.IsValueType)
 					{
-						if (map.MappedType.IsValueType)
-						{
-							getSetter = null;
-						}
-						else
-						{
-							getSetter = FastColumnSetter.GetFastSetterMethodInfoUnsafe(map.MappedType);
-						}
+						getSetter = null;
 					}
 					else
 					{
 						getSetter = FastColumnSetter.GetFastSetterMethodInfoUnsafe(map.MappedType);
 					}
+				}
+				else
+				{
 					getSetter = FastColumnSetter.GetFastSetterMethodInfoUnsafe(map.MappedType);
 				}
+				getSetter = FastColumnSetter.GetFastSetterMethodInfoUnsafe(map.MappedType);
+			}
 
-				for (int i = 0; i < cols.Length; i++)
-				{
-					var name = SQLite3Native.ColumnName16(stmt, i);
-					cols[i] = map.FindColumn(name);
-					if (cols[i] != null)
-						if (getSetter != null)
-						{
-							fastColumnSetters[i] = (Action<object, Sqlite3Statement, int>)getSetter.Invoke(null, new object[] { _conn, cols[i] });
-						}
-						else
-						{
-							fastColumnSetters[i] = FastColumnSetter.GetFastSetter<T>(_conn, cols[i]);
-						}
-				}
+			for (int i = 0; i < cols.Length; i++)
+			{
+				var name = SQLite3Native.ColumnName16(stmt, i);
+				cols[i] = map.FindColumn(name);
+				if (cols[i] != null)
+					if (getSetter != null)
+					{
+						fastColumnSetters[i] = (Action<object, Sqlite3Statement, int>)getSetter.Invoke(null, new object[] { conn, cols[i] });
+					}
+					else
+					{
+						fastColumnSetters[i] = FastColumnSetter.GetFastSetter<T>(conn, cols[i]);
+					}
 			}
 
 			while (SQLite3Native.Step(stmt) == SQLite3Native.Result.Row)
@@ -163,9 +148,9 @@ public partial class SQLiteCommand
 
 	private IEnumerable<T> ExecuteDeferredQueryAsValueTuple<T>()
 	{
-		if (_conn.Trace)
+		if (conn.Trace)
 		{
-			_conn.Tracer?.Invoke("Executing Query: " + this);
+			conn.Tracer?.Invoke("Executing Query: " + this);
 		}
 
 		var fields = typeof(T).GetFields();
@@ -199,9 +184,9 @@ public partial class SQLiteCommand
 
 	public T? ExecuteScalar<T>()
 	{
-		if (_conn.Trace)
+		if (conn.Trace)
 		{
-			_conn.Tracer?.Invoke("Executing Query: " + this);
+			conn.Tracer?.Invoke("Executing Query: " + this);
 		}
 
 		T? val = default(T);
@@ -225,7 +210,7 @@ public partial class SQLiteCommand
 			}
 			else
 			{
-				throw SQLiteException.New(r, SQLite3Native.GetErrmsg(_conn.Handle));
+				throw SQLiteException.New(r, SQLite3Native.GetErrmsg(conn.Handle));
 			}
 		}
 		finally
@@ -238,9 +223,9 @@ public partial class SQLiteCommand
 
 	public IEnumerable<T?> ExecuteQueryScalars<T>()
 	{
-		if (_conn.Trace)
+		if (conn.Trace)
 		{
-			_conn.Tracer?.Invoke("Executing Query: " + this);
+			conn.Tracer?.Invoke("Executing Query: " + this);
 		}
 		var stmt = Prepare();
 		try
@@ -290,7 +275,7 @@ public partial class SQLiteCommand
 		var i = 1;
 		foreach (var b in _bindings)
 		{
-			parts[i] = string.Format("  {0}: {1}", i - 1, b.Value);
+			parts[i] = $"  {i - 1}: {b.Value}";
 			i++;
 		}
 		return string.Join(Environment.NewLine, parts);
@@ -298,7 +283,7 @@ public partial class SQLiteCommand
 
 	Sqlite3Statement Prepare()
 	{
-		var stmt = SQLite3Native.Prepare2(_conn.Handle, CommandText);
+		var stmt = SQLite3Native.Prepare2(conn.Handle, CommandText);
 		BindAll(stmt);
 		return stmt;
 	}
@@ -474,7 +459,7 @@ public partial class SQLiteCommand
 		public int Index { get; set; }
 	}
 
-	object? ReadCol(Sqlite3Statement stmt, int index, SQLite3Native.ColType type, Type clrType, TableMapping.Column? column)
+	object? ReadCol(Sqlite3Statement stmt, int index, SQLite3Native.ColType type, Type clrType, TableColumn? column)
 	{
 		if (type == SQLite3Native.ColType.Null)
 		{

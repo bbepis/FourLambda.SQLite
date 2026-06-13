@@ -21,11 +21,21 @@ public abstract class BaseTemporalTest<TTemporalType> : DBTestHarness where TTem
 		public TTemporalType? ModifiedTime { get; set; }
 	}
 
+	TableMapping BuildMapping(bool storeAsText, string? format = null)
+	{
+		return TableMappingBuilder.FromType(
+				typeof(TemporalClass),
+				CreateFlags.None,
+				colDef =>
+				{
+					if (colDef.Name == nameof(TemporalClass.ModifiedTime))
+						colDef.WithStoreAsText(storeAsText, format);
+				})
+			.Build();
+	}
+
 	private void TestWrite(TableMapping mapping, string expected)
 	{
-		if (mapping.Columns[1].StoreAsTextFormat == "custom")
-			mapping.Columns[1].StoreAsTextFormat = TestCustomFormat;
-
 		Database.CreateTable(mapping);
 
 		var o = new TemporalClass
@@ -79,15 +89,13 @@ public abstract class BaseTemporalTest<TTemporalType> : DBTestHarness where TTem
 	[Test]
 	public void TestWriteAsTicks()
 	{
-		TestWrite(new TableMapping(typeof(TemporalClass)), TestedValueTicks.ToString());
+		TestWrite(BuildMapping(storeAsText: false), TestedValueTicks.ToString());
 	}
 
 	[Test]
 	public void TestWriteAsString()
 	{
-		var stringMapping = new TableMapping(typeof(TemporalClass));
-		var column = stringMapping.Columns.First(x => x.Name == nameof(TemporalClass.ModifiedTime));
-		column.StoreAsText = true;
+		var stringMapping = BuildMapping(storeAsText: true);
 
 		TestWrite(stringMapping, TestedValue.ToString(TestDefaultFormat, null));
 	}
@@ -95,10 +103,7 @@ public abstract class BaseTemporalTest<TTemporalType> : DBTestHarness where TTem
 	[Test]
 	public void TestWriteAsCustomFormattedString()
 	{
-		var customStringMapping = new TableMapping(typeof(TemporalClass));
-		var column = customStringMapping.Columns.First(x => x.Name == nameof(TemporalClass.ModifiedTime));
-		column.StoreAsText = true;
-		column.StoreAsTextFormat = TestCustomFormat;
+		var customStringMapping = BuildMapping(storeAsText: true, format: TestCustomFormat);
 
 		TestWrite(customStringMapping, TestedValue.ToString(TestCustomFormat, null));
 	}
@@ -106,15 +111,13 @@ public abstract class BaseTemporalTest<TTemporalType> : DBTestHarness where TTem
 	[Test]
 	public void LinqNullableTestAsTicks()
 	{
-		InternalLinqNullableTest(new TableMapping(typeof(TemporalClass)));
+		InternalLinqNullableTest(BuildMapping(storeAsText: false));
 	}
 
 	[Test]
 	public void LinqNullableTestAsSortableString()
 	{
-		var stringMapping = new TableMapping(typeof(TemporalClass));
-		var column = stringMapping.Columns.First(x => x.Name == nameof(TemporalClass.ModifiedTime));
-		column.StoreAsText = true;
+		var stringMapping = BuildMapping(storeAsText: true);
 
 		InternalLinqNullableTest(stringMapping);
 	}

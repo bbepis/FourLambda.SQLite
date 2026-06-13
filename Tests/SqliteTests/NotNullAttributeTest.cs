@@ -33,7 +33,7 @@ public class NotNullAttributeTest : DBTestHarness
 
 	private class ClassWithPK
 	{
-		[PrimaryKey, AutoIncrement, ExpectedNull(false)]
+		[PrimaryKey, AutoIncrement]
 		public int Id { get; set; }
 	}
 
@@ -42,14 +42,10 @@ public class NotNullAttributeTest : DBTestHarness
 		Database.CreateTable<NotNullNoPK>();
 	}
 
-	private SQLiteConnection.ColumnInfo[] GetExpectedColumnInfos(Type type)
+	private (string name, bool nullable)[] GetExpectedColumnInfos(Type type)
 	{
 		var expectedValues = type.GetRuntimeProperties()
-			.Select(prop => new SQLiteConnection.ColumnInfo
-			{
-				Name = prop.Name,
-				notnull = prop.GetCustomAttribute<ExpectedNullAttribute>().ShouldBeNull ? 0 : 1
-			})
+			.Select(prop => (prop.Name, prop.GetCustomAttribute<ExpectedNullAttribute>()!.ShouldBeNull))
 			.ToArray();
 
 		return expectedValues;
@@ -61,15 +57,8 @@ public class NotNullAttributeTest : DBTestHarness
 		Database.CreateTable<ClassWithPK>();
 		var cols = Database.GetTableInfo("ClassWithPK");
 
-		var joined = GetExpectedColumnInfos(typeof(ClassWithPK))
-			.Join(cols, expected => expected.Name, actual => actual.Name,
-				(expected, actual) => new { expected, actual })
-			.Where(@t => @t.actual.notnull != @t.expected.notnull)
-			.Select(@t => @t.actual.Name);
-
-		Assert.AreNotEqual(0, cols.Count(), "Failed to get table info");
-		Assert.IsTrue(joined.Count() == 0,
-			$"not null constraint was not created for the following properties: {string.Join(", ", joined.ToArray())}");
+		Assert.AreEqual(1, cols.Count, "Failed to get table info");
+		Assert.IsFalse(cols[0].IsNullable, $"not null constraint was not created for the primary key");
 	}
 
 	[Test]
@@ -79,9 +68,9 @@ public class NotNullAttributeTest : DBTestHarness
 		var cols = Database.GetTableInfo(nameof(NotNullNoPK));
 
 		var joined = GetExpectedColumnInfos(typeof(NotNullNoPK))
-			.Join(cols, expected => expected.Name, actual => actual.Name,
+			.Join(cols, expected => expected.name, actual => actual.Name,
 				(expected, actual) => new { expected, actual })
-			.Where(@t => @t.actual.notnull != @t.expected.notnull)
+			.Where(@t => @t.actual.IsNullable != @t.expected.nullable)
 			.Select(@t => @t.actual.Name)
 			.ToArray();
 

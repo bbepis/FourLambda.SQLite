@@ -1,57 +1,43 @@
 namespace FourLambda.SQLite;
 
 [AttributeUsage(AttributeTargets.Class)]
-public class TableAttribute : Attribute
+public class TableAttribute(string name) : Attribute
 {
-	public string Name { get; set; }
+	public string Name { get; set; } = name;
 
 	/// <summary>
 	/// Flag whether to create the table without rowid (see https://sqlite.org/withoutrowid.html)
 	///
-	/// The default is <c>false</c> so that sqlite adds an implicit <c>rowid</c> to every table created.
+	 /// The default is <c>false</c> so that sqlite adds an implicit <c>rowid</c> to every table created.
 	/// </summary>
 	public bool WithoutRowId { get; set; }
 
 	public bool Strict { get; set; }
-
-	public TableAttribute(string name)
-	{
-		Name = name;
-	}
 }
 
 [AttributeUsage(AttributeTargets.Property)]
-public class ColumnAttribute : Attribute
+public class ColumnAttribute(string name) : Attribute
 {
-	public string Name { get; set; }
-
-	public ColumnAttribute(string name)
-	{
-		Name = name;
-	}
+	public string Name { get; } = name;
 }
 
 [AttributeUsage(AttributeTargets.Property)]
-public class PrimaryKeyAttribute : Attribute
+public class PrimaryKeyAttribute(int order = 0) : Attribute
 {
-	public int Order { get; set; }
+	public int Order { get; init; } = order;
 }
 
 [AttributeUsage(AttributeTargets.Property)]
-public class AutoIncrementAttribute : Attribute
-{
-}
+public class AutoIncrementAttribute : Attribute;
 
 [AttributeUsage(AttributeTargets.Property, AllowMultiple = true)]
 public class IndexedAttribute : Attribute
 {
-	public string Name { get; set; }
+	public string? Name { get; set; }
 	public int Order { get; set; }
-	public virtual bool Unique { get; set; }
+	public virtual bool Unique { get; init; }
 
-	public IndexedAttribute()
-	{
-	}
+	public IndexedAttribute() { }
 
 	public IndexedAttribute(string name, int order)
 	{
@@ -61,35 +47,18 @@ public class IndexedAttribute : Attribute
 }
 
 [AttributeUsage(AttributeTargets.Property)]
-public class IgnoreAttribute : Attribute
-{
-}
+public class IgnoreAttribute : Attribute;
 
 [AttributeUsage(AttributeTargets.Property)]
 public class UniqueAttribute : IndexedAttribute
 {
-	public override bool Unique
-	{
-		get { return true; }
-		set { /* throw?  */ }
-	}
+	public override bool Unique => true;
 }
 
 [AttributeUsage(AttributeTargets.Property)]
-public class MaxLengthAttribute : Attribute
+public class MaxLengthAttribute(int length) : Attribute
 {
-	public int Value { get; private set; }
-
-	public MaxLengthAttribute(int length)
-	{
-		Value = length;
-	}
-}
-
-public sealed class PreserveAttribute : System.Attribute
-{
-	public bool AllMembers;
-	public bool Conditional;
+	public int Value { get; } = length;
 }
 
 /// <summary>
@@ -98,78 +67,60 @@ public sealed class PreserveAttribute : System.Attribute
 /// "BINARY" is the default.
 /// </summary>
 [AttributeUsage(AttributeTargets.Property)]
-public class CollationAttribute : Attribute
+public class CollationAttribute(string collation) : Attribute
 {
-	public string Value { get; private set; }
-
-	public CollationAttribute(string collation)
-	{
-		Value = collation;
-	}
+	public string Collation { get; } = collation;
 }
 
 [AttributeUsage(AttributeTargets.Property)]
-public class NotNullAttribute : Attribute
-{
-}
+public class NotNullAttribute : Attribute;
 
 [AttributeUsage(AttributeTargets.Property)]
-public class StoreAsTextAttribute : Attribute
+public class StoreAsTextAttribute(string? format = null) : Attribute
 {
 	/// <summary>
 	/// The format argument to pass into <see cref="DateTime.ToString(string)"/> or equivalent methods.
 	/// </summary>
-	public string? Format { get; set; }
+	public string? Format { get; set; } = format;
 }
 
-public class TableMapping
+/// <summary>
+/// Immutable mapping from a database table to a .NET type (or a manual column definition).
+/// Construct via <see cref="TableMappingBuilder"/>.
+/// </summary>
+public sealed class TableMapping
 {
 	[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)]
-	public Type MappedType { get; private set; }
+	public Type? MappedType { get; }
 
-	public string TableName { get; private set; }
+	public string TableName { get; }
+	public bool WithoutRowId { get; }
+	public bool Strict { get; }
+	public TableColumn[] Columns { get; }
+	public TableColumn[] PrimaryKeyColumns { get; }
+	internal string? PKWhereSql { get; }
+	public CreateFlags CreateFlags { get; }
+	public bool HasAutoIncPK { get; }
 
-	public bool WithoutRowId { get; private set; }
+	TableColumn? _autoPk;
 
-	public bool Strict { get; private set; }
+	public TableColumn[] InsertColumns { get; }
+	public TableColumn[] InsertOrReplaceColumns { get; }
 
-	public Column[] Columns { get; private set; }
-
-	public Column[] PrimaryKeyColumns { get; private set; }
-
-	public string? PKWhereSql { get; private set; }
-
-	public CreateFlags CreateFlags { get; private set; }
-
-	internal MapMethod Method { get; private set; } = MapMethod.ByName;
-
-	readonly Column? _autoPk;
-	readonly Column[] _insertColumns;
-	readonly Column[] _insertOrReplaceColumns;
-
-	public TableMapping(
-		[DynamicallyAccessedMembers (DynamicallyAccessedMemberTypes.All)]
-		Type type,
-		CreateFlags createFlags = CreateFlags.None)
+internal TableMapping(
+		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)] Type? mappedType,
+		string tableName,
+		bool withoutRowId,
+		bool strict,
+		TableColumn[] columns,
+		CreateFlags createFlags)
 	{
-		MappedType = type;
+		MappedType = mappedType;
+		TableName = tableName;
+		WithoutRowId = withoutRowId;
+		Strict = strict;
+		Columns = columns;
 		CreateFlags = createFlags;
-
-		var tableAttr = type.GetCustomAttribute<TableAttribute>();
-
-		TableName = (tableAttr != null && !string.IsNullOrEmpty(tableAttr.Name)) ? tableAttr.Name : MappedType.Name;
-		WithoutRowId = tableAttr?.WithoutRowId ?? false;
-		Strict = tableAttr?.Strict ?? false;
-
-		var members = GetPublicMembers(type);
-		var cols = new List<Column>(members.Count);
-		foreach (var m in members)
-		{
-			var ignore = m.IsDefined(typeof(IgnoreAttribute), true);
-			if (!ignore)
-				cols.Add(new Column(m, createFlags));
-		}
-		Columns = cols.ToArray();
 
 		PrimaryKeyColumns = Columns.Where(c => c.IsPK).OrderBy(c => c.PKOrder).ToArray();
 
@@ -190,27 +141,255 @@ public class TableMapping
 
 		if (PrimaryKeyColumns.Length > 0)
 		{
-			// TODO: proper string escaping everywhere
-			// TODO: cache built queries for SELECT, UPDATE, DELETE
 			PKWhereSql = "where " + string.Join(" and ", PrimaryKeyColumns.Select(pk => $"\"{pk.Name}\" = ?"));
 		}
 		else
 		{
-			// People should not be calling Get/Find without a PK
 			PKWhereSql = null;
 		}
 
-		_insertColumns = Columns.Where(c => !c.IsAutoInc).ToArray();
-		_insertOrReplaceColumns = Columns.ToArray();
+		InsertColumns = Columns.Where(c => !c.IsAutoInc).ToArray();
+		InsertOrReplaceColumns = Columns.ToArray();
 	}
 
-	private IReadOnlyCollection<PropertyInfo> GetPublicMembers(
-		[DynamicallyAccessedMembers (DynamicallyAccessedMemberTypes.All)]
-		Type type)
+	internal void SetAutoIncPK(object obj, long id)
+	{
+		if (_autoPk != null)
+		{
+			_autoPk.SetValue(obj, Convert.ChangeType(id, _autoPk.ColumnType, null));
+		}
+	}
+
+	internal TableColumn? FindColumnWithPropertyName(string propertyName)
+	{
+		return Columns.FirstOrDefault(c => c.PropertyName == propertyName);
+	}
+
+	internal TableColumn? FindColumn(string columnName)
+	{
+		return Columns.FirstOrDefault(c => string.Equals(c.Name, columnName, StringComparison.OrdinalIgnoreCase));
+	}
+}
+
+/// <summary>
+/// Immutable column within a <see cref="TableMapping"/>. Construct via <see cref="TableMappingBuilder"/>.
+/// </summary>
+public sealed class TableColumn
+{
+	public string Name { get; }
+	public PropertyInfo? PropertyInfo { get; }
+	public string? PropertyName => PropertyInfo?.Name;
+	public Type ColumnType { get; }
+	public SqliteCellType SqliteType { get; }
+	public string? Collation { get; }
+	public bool IsAutoInc { get; }
+	public bool IsAutoGuid { get; }
+	public bool IsPK => PKOrder.HasValue;
+	public int? PKOrder { get; }
+	public IEnumerable<IndexedAttribute> Indices { get; }
+	public bool IsNullable { get; }
+	public int? MaxStringLength { get; }
+	public bool StoreAsText { get; }
+	public string? StoreAsTextFormat { get; }
+
+	internal TableColumn(
+		string name,
+		PropertyInfo? propertyInfo,
+		Type columnType,
+		SqliteCellType sqliteType,
+		string? collation,
+		bool isAutoInc,
+		bool isAutoGuid,
+		int? pkOrder,
+		IEnumerable<IndexedAttribute> indices,
+		bool isNullable,
+		int? maxStringLength,
+		bool storeAsText,
+		string? storeAsTextFormat)
+	{
+		Name = name;
+		PropertyInfo = propertyInfo;
+		ColumnType = columnType;
+		SqliteType = sqliteType;
+		Collation = collation;
+		IsAutoInc = isAutoInc;
+		IsAutoGuid = isAutoGuid;
+		PKOrder = pkOrder;
+		Indices = indices;
+		IsNullable = isNullable;
+		MaxStringLength = maxStringLength;
+		StoreAsText = storeAsText;
+		StoreAsTextFormat = storeAsTextFormat;
+	}
+
+	public void SetValue(object obj, object? val)
+	{
+		if (val != null && ColumnType.GetTypeInfo().IsEnum)
+			PropertyInfo!.SetValue(obj, Enum.ToObject(ColumnType, val));
+		else
+			PropertyInfo!.SetValue(obj, val);
+	}
+
+	public object? GetValue(object obj)
+	{
+		object? value = PropertyInfo!.GetValue(obj);
+
+		if (!StoreAsText || value == null)
+			return value;
+
+		return value switch
+		{
+			DateTime dateTime => dateTime.ToString(StoreAsTextFormat ?? "O"),
+			TimeSpan timeSpan => timeSpan.ToString(StoreAsTextFormat ?? "c"),
+			DateTimeOffset dateTimeOffset => dateTimeOffset.ToString(StoreAsTextFormat ?? "O"),
+			DateOnly dateOnly => dateOnly.ToString(StoreAsTextFormat ?? "O"),
+			TimeOnly timeOnly => timeOnly.ToString(StoreAsTextFormat ?? "O"),
+			IFormattable formattable => formattable.ToString(StoreAsTextFormat, null),
+			_ => value
+		};
+	}
+
+	internal string GetCreationSql(bool tableHasCompositeKey)
+	{
+		var sqliteType = SqliteType switch
+		{
+			SqliteCellType.Integer => "INTEGER",
+			SqliteCellType.Real => "REAL",
+			SqliteCellType.Text => "TEXT",
+			SqliteCellType.Blob => "BLOB",
+			SqliteCellType.Any => "ANY",
+			_ => throw new ArgumentOutOfRangeException()
+		};
+
+		string decl = $"\"{Name}\" {sqliteType} ";
+
+		if (!tableHasCompositeKey && IsPK)
+		{
+			decl += "primary key ";
+
+			if (IsAutoInc)
+			{
+				decl += "autoincrement ";
+			}
+		}
+
+		if (!IsNullable)
+		{
+			decl += "not null ";
+
+			// TODO: set default value
+			if (SqliteType == SqliteCellType.Integer)
+				decl += "default 0 ";
+		}
+		if (!string.IsNullOrEmpty(Collation))
+		{
+			decl += "collate " + Collation + " ";
+		}
+
+		return decl;
+	}
+}
+
+public enum SqliteCellType
+{
+	Integer,
+	Real,
+	Text,
+	Blob,
+	Any
+}
+
+/// <summary>
+/// Builder for creating immutable <see cref="TableMapping"/> instances.
+/// Supports type-backed initialization with optional column customization,
+/// and manual table definition without a concrete .NET type.
+/// </summary>
+public class TableMappingBuilder
+{
+	private Type? _baseType = null;
+
+	public CreateFlags CreateFlags { get; set; }
+	public bool WithoutRowId { get; set; }
+	public bool Strict { get; set; }
+	
+	public List<ColumnDefinition> Columns { get; internal init; } = new();
+
+	/// <summary>
+	/// Start building a mapping from a concrete .NET type using reflection to discover columns.
+	/// </summary>
+	public static TableMappingBuilder FromType<
+		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
+		T>(
+		CreateFlags createFlags = CreateFlags.None,
+		Action<ColumnDefinition>? configure = null)
+	{
+		return FromType(typeof(T), createFlags, configure);
+	}
+
+
+	/// <summary>
+	/// Start building a mapping from a concrete .NET type using reflection to discover columns.
+	/// </summary>
+	public static TableMappingBuilder FromType(
+		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] Type type,
+		CreateFlags createFlags = CreateFlags.None,
+		Action<ColumnDefinition>? configure = null)
+	{
+		var tableAttr = type.GetCustomAttribute<TableAttribute>();
+
+		var members = GetPublicMembers(type);
+		var cols = new List<ColumnDefinition>(members.Count);
+
+		foreach (var m in members)
+		{
+			if (m.IsDefined(typeof(IgnoreAttribute), true))
+				continue;
+
+			var colDef = new ColumnDefinition(m, createFlags);
+			configure?.Invoke(colDef);
+			cols.Add(colDef);
+		}
+
+		bool withoutRowId = tableAttr?.WithoutRowId ?? false;
+		bool strict = tableAttr?.Strict ?? false;
+
+		var builder = new TableMappingBuilder
+		{
+			_tableName = tableAttr?.Name ?? type.Name,
+			WithoutRowId = withoutRowId,
+			Strict = strict,
+			CreateFlags = createFlags,
+			Columns = cols,
+			_baseType = type
+		};
+
+		return builder;
+	}
+
+	static TableMappingBuilder CreateBuilder(
+		string tableName,
+		ColumnDefinition[] columns,
+		bool withoutRowId = false,
+		bool strict = false,
+		CreateFlags flags = CreateFlags.None)
+	{
+		return new TableMappingBuilder
+		{
+			_tableName = tableName,
+			WithoutRowId = withoutRowId,
+			Strict = strict,
+			CreateFlags = flags,
+			Columns = columns.ToList()
+		};
+	}
+
+	static IReadOnlyCollection<PropertyInfo> GetPublicMembers(
+		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] Type type)
 	{
 		var members = new List<PropertyInfo>();
 		var memberNames = new HashSet<string>();
 		var newMembers = new List<PropertyInfo>();
+
 		do
 		{
 			var ti = type.GetTypeInfo();
@@ -231,341 +410,279 @@ public class TableMapping
 
 			type = ti.BaseType;
 		}
-		while (type != typeof(object));
+		while (type != null && type != typeof(object));
 
 		return members;
 	}
 
-	public bool HasAutoIncPK { get; private set; }
-
-	public void SetAutoIncPK(object obj, long id)
+	/// <summary>
+	/// Set the table name. Defaults to <c>MappedType.Name</c> when building from a type.
+	/// </summary>
+	public TableMappingBuilder TableName(string tableName)
 	{
-		if (_autoPk != null)
-		{
-			_autoPk.SetValue(obj, Convert.ChangeType(id, _autoPk.ColumnType, null));
-		}
+		_tableName = tableName;
+		return this;
 	}
 
-	public Column[] InsertColumns
+	string? _tableName;
+
+	/// <summary>
+	/// Enable <c>WITHOUT ROWID</c> table storage.
+	/// </summary>
+	public TableMappingBuilder SetWithoutRowId(bool value = true)
 	{
-		get
-		{
-			return _insertColumns;
-		}
+		WithoutRowId = value;
+		return this;
 	}
 
-	public Column[] InsertOrReplaceColumns
+	/// <summary>
+	/// Enable <c>STRICT</c> table type enforcement.
+	/// </summary>
+	public TableMappingBuilder SetStrict(bool value = true)
 	{
-		get
-		{
-			return _insertOrReplaceColumns;
-		}
+		Strict = value;
+		return this;
 	}
 
-	public Column FindColumnWithPropertyName(string propertyName)
+	/// <summary>
+	/// Add a column backed by a property from a type. Use this to build mappings manually
+	/// while still having reflection-based value getting/setting.
+	 /// </summary>
+	public TableMappingBuilder AddColumn(
+		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] PropertyInfo propertyInfo,
+		CreateFlags createFlags = CreateFlags.None,
+		Action<ColumnDefinition>? configure = null)
 	{
-		var exact = Columns.FirstOrDefault(c => c.PropertyName == propertyName);
-		return exact;
+		var colDef = new ColumnDefinition(propertyInfo, createFlags);
+		configure?.Invoke(colDef);
+		return AddColumn(colDef);
 	}
 
-	public Column FindColumn(string columnName)
+	/// <summary>
+	/// Add a manually defined column without a backing property.
+	/// Use this for ad-hoc query results or tables not backed by a concrete class.
+	/// </summary>
+	public TableMappingBuilder AddColumn(string name, Type clrType, bool isNullable = true)
 	{
-		if (Method != MapMethod.ByName)
-			throw new InvalidOperationException($"This {nameof(TableMapping)} is not mapped by name, but {Method}.");
-
-		var exact = Columns.FirstOrDefault(c => c.Name.ToLower() == columnName.ToLower());
-		return exact;
-	}
-
-	public class Column
-	{
-		public string Name { get; private set; }
-
-		public PropertyInfo PropertyInfo { get; private set; }
-
-		public string PropertyName => PropertyInfo.Name;
-
-		public Type ColumnType { get; private set; }
-
-		public SqliteCellType SqliteType { get; private set; }
-
-		public string Collation { get; private set; }
-
-		public bool IsAutoInc { get; private set; }
-		public bool IsAutoGuid { get; private set; }
-
-		public bool IsPK => PKOrder != null;
-		public int? PKOrder { get; private set; }
-
-		public IEnumerable<IndexedAttribute> Indices { get; set; }
-
-		public bool IsNullable { get; private set; }
-
-		public int? MaxStringLength { get; private set; }
-
-		public bool StoreAsText
+		var colDef = new ColumnDefinition(name, clrType)
 		{
-			get;
-			set
-			{
-				field = value;
-				SqliteType = Orm.SqlType(this);
-			}
-		}
-
-		public string? StoreAsTextFormat { get; set; }
-
-		public Column(PropertyInfo propertyInfo, CreateFlags createFlags = CreateFlags.None)
-		{
-			PropertyInfo = propertyInfo;
-			var memberType = propertyInfo.PropertyType;
-
-			var colAttr = propertyInfo.GetCustomAttribute<ColumnAttribute>();
-
-			Name = colAttr?.Name ?? propertyInfo.Name;
-
-			//If this type is Nullable<T> then Nullable.GetUnderlyingType returns the T, otherwise it returns null, so get the actual type instead
-			ColumnType = Nullable.GetUnderlyingType(memberType) ?? memberType;
-			Collation = Orm.Collation(propertyInfo);
-
-			var memberStoreAsTextAttr = propertyInfo.GetCustomAttribute<StoreAsTextAttribute>();
-			StoreAsText = memberStoreAsTextAttr != null || memberType.GetCustomAttribute<StoreAsTextAttribute>() != null;
-			StoreAsTextFormat = memberStoreAsTextAttr?.Format;
-
-			PKOrder = Orm.PKOrder(propertyInfo);
-
-			var implicitPk = (createFlags & CreateFlags.ImplicitPK) == CreateFlags.ImplicitPK &&
-			                 propertyInfo.Name.Equals(Orm.ImplicitPkName, StringComparison.OrdinalIgnoreCase);
-
-			if (PKOrder == null && implicitPk)
-				PKOrder = 0;
-
-			var isAuto = Orm.IsAutoInc(propertyInfo) || (IsPK && ((createFlags & CreateFlags.AutoIncPK) == CreateFlags.AutoIncPK));
-			IsAutoGuid = isAuto && ColumnType == typeof(Guid);
-			IsAutoInc = isAuto && !IsAutoGuid;
-
-			Indices = Orm.GetIndices(propertyInfo);
-
-			var nullabilityInfo = new NullabilityInfoContext().Create(propertyInfo);
-
-			bool explicitlyNull = Nullable.GetUnderlyingType(memberType) != null || nullabilityInfo.WriteState == NullabilityState.Nullable;
-
-			if (explicitlyNull && IsPK)
-				throw new ArgumentException("A column marked as primary key cannot be nullable.");
-
-			if (explicitlyNull && Orm.IsMarkedNotNull(propertyInfo))
-				throw new ArgumentException("A column cannot be marked as [NotNull] while having an explicitly nullable property type.");
-			
-			IsNullable = explicitlyNull || ((createFlags.HasFlag(CreateFlags.ImplicitNullable) || nullabilityInfo.WriteState == NullabilityState.Unknown) && !(IsPK || Orm.IsMarkedNotNull(propertyInfo)));
-			MaxStringLength = Orm.MaxStringLength(propertyInfo);
-
-			SqliteType = Orm.SqlType(this);
-		}
-
-		public void SetValue(object obj, object val)
-		{
-			if (val != null && ColumnType.GetTypeInfo().IsEnum)
-				PropertyInfo.SetValue(obj, Enum.ToObject(ColumnType, val));
-			else
-				PropertyInfo.SetValue(obj, val);
-		}
-
-		public object? GetValue(object obj)
-		{
-			object? value = PropertyInfo.GetValue(obj);
-
-			if (!StoreAsText || value == null)
-				return value;
-
-			return value switch
-			{
-				DateTime dateTime => dateTime.ToString(StoreAsTextFormat ?? "O"),
-				TimeSpan timeSpan => timeSpan.ToString(StoreAsTextFormat ?? "c"),
-				DateTimeOffset dateTimeOffset => dateTimeOffset.ToString(StoreAsTextFormat ?? "O"),
-				DateOnly dateOnly => dateOnly.ToString(StoreAsTextFormat ?? "O"),
-				TimeOnly timeOnly => timeOnly.ToString(StoreAsTextFormat ?? "O"),
-				IFormattable formattable => formattable.ToString(StoreAsTextFormat, null),
-				_ => value
-			};
-		}
-	}
-
-	internal enum MapMethod
-	{
-		ByName,
-		ByPosition
-	}
-}
-
-public enum SqliteCellType
-{
-	Integer,
-	Real,
-	Text,
-	Blob,
-	Any
-}
-
-public static class Orm
-{
-	public const int DefaultMaxStringLength = 140;
-	public const string ImplicitPkName = "Id";
-	public const string ImplicitIndexSuffix = "Id";
-
-	public static Type GetType(object obj)
-	{
-		if (obj == null)
-			return typeof(object);
-		var rt = obj as IReflectableType;
-		if (rt != null)
-			return rt.GetTypeInfo().AsType();
-		return obj.GetType();
-	}
-
-	public static string SqlDecl(TableMapping.Column p, bool compositeKey)
-	{
-		var sqliteType = p.SqliteType switch
-		{
-			SqliteCellType.Integer => "INTEGER",
-			SqliteCellType.Real => "REAL",
-			SqliteCellType.Text => "TEXT",
-			SqliteCellType.Blob => "BLOB",
-			SqliteCellType.Any => "ANY",
-			_ => throw new ArgumentOutOfRangeException()
+			IsNullable = isNullable
 		};
 
-		string decl = $"\"{p.Name}\" {sqliteType} ";
-
-		if (!compositeKey)
-		{
-			if (p.IsPK)
-			{
-				decl += "primary key ";
-			}
-
-			if (p.IsAutoInc)
-			{
-				decl += "autoincrement ";
-			}
-		}
-
-		if (!p.IsNullable)
-		{
-			decl += "not null ";
-
-			if (p.SqliteType == SqliteCellType.Integer)
-				decl += "default 0 ";
-		}
-		if (!string.IsNullOrEmpty(p.Collation))
-		{
-			decl += "collate " + p.Collation + " ";
-		}
-
-		return decl;
+		return AddColumn(colDef);
 	}
 
-	public static SqliteCellType SqlType(TableMapping.Column p)
+	TableMappingBuilder AddColumn(ColumnDefinition colDef)
 	{
-		var clrType = p.ColumnType;
+		Columns.Add(colDef);
+		return this;
+	}
 
-		if (clrType == typeof(bool) || clrType == typeof(Byte) || clrType == typeof(UInt16) || clrType == typeof(SByte) || clrType == typeof(Int16) || clrType == typeof(Int32) || clrType == typeof(UInt32) || clrType == typeof(Int64) || clrType == typeof(UInt64))
+	/// <summary>
+	/// Build the immutable <see cref="TableMapping"/>.
+	/// </summary>
+	public TableMapping Build()
+	{
+		_tableName ??= _baseType?.Name;
+
+		if (string.IsNullOrWhiteSpace(_tableName))
+			throw new ArgumentException("Mapping must have a valid table name.");
+
+		if (Columns.Count == 0)
+			throw new ArgumentException("Mapping must have at least one column.");
+
+		return new TableMapping(
+			_baseType,
+			_tableName,
+			WithoutRowId,
+			Strict,
+			Columns.Select(x => x.Build()).ToArray(),
+			CreateFlags);
+	}
+}
+
+/// <summary>
+/// Mutable column definition used during building. Immutable after <see cref="Build"/> is called on the parent builder.
+/// </summary>
+public class ColumnDefinition
+{
+	public string Name { get; set; }
+	public PropertyInfo? PropertyInfo { get; private set; }
+	public Type ColumnType { get; set; }
+	public SqliteCellType? SqliteType { get; set; }
+	public string? Collation { get; set; }
+	public bool IsAutoIncrement { get; set; }
+	public bool IsAutoGuid { get; set; }
+	public int? PKOrder { get; set; }
+	public IEnumerable<IndexedAttribute> Indices { get; set; } = Array.Empty<IndexedAttribute>();
+	public bool IsNullable { get; set; }
+	public int? MaxStringLength { get; set; }
+	public bool StoreAsText { get; set; }
+	public string? StoreAsTextFormat { get; set; }
+
+	internal ColumnDefinition(
+		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] PropertyInfo propertyInfo,
+		CreateFlags createFlags = CreateFlags.None)
+	{
+		PropertyInfo = propertyInfo;
+		var memberType = propertyInfo.PropertyType;
+
+		var colAttr = propertyInfo.GetCustomAttribute<ColumnAttribute>();
+		Name = colAttr?.Name ?? propertyInfo.Name;
+
+		ColumnType = Nullable.GetUnderlyingType(memberType) ?? memberType;
+		Collation = propertyInfo.GetCustomAttribute<CollationAttribute>()?.Collation;
+
+		var memberStoreAsTextAttr = propertyInfo.GetCustomAttribute<StoreAsTextAttribute>();
+		StoreAsText = memberStoreAsTextAttr != null || memberType.GetCustomAttribute<StoreAsTextAttribute>() != null;
+		StoreAsTextFormat = memberStoreAsTextAttr?.Format;
+
+		PKOrder = propertyInfo.GetCustomAttribute<PrimaryKeyAttribute>()?.Order;
+
+		var implicitPk = (createFlags & CreateFlags.ImplicitPK) == CreateFlags.ImplicitPK &&
+		                 string.Equals(propertyInfo.Name, Orm.ImplicitPkName, StringComparison.OrdinalIgnoreCase);
+
+		if (!PKOrder.HasValue && implicitPk)
+			PKOrder = 0;
+
+		bool isPk = PKOrder.HasValue;
+
+		var isAutoIncrement = propertyInfo.GetCustomAttribute<AutoIncrementAttribute>() != null
+		             || (isPk && createFlags.HasFlag(CreateFlags.AutoIncPK));
+
+		IsAutoGuid = isAutoIncrement && ColumnType == typeof(Guid);
+		IsAutoIncrement = isAutoIncrement && !IsAutoGuid;
+
+		Indices = propertyInfo.GetCustomAttributes<IndexedAttribute>().ToArray();
+
+		bool markedNotNull = propertyInfo.GetCustomAttribute<NotNullAttribute>() != null;
+
+		var nullabilityInfo = new NullabilityInfoContext().Create(propertyInfo);
+		bool explicitlyNull = Nullable.GetUnderlyingType(memberType) != null || nullabilityInfo.WriteState == NullabilityState.Nullable;
+
+		if (explicitlyNull && isPk)
+			throw new ArgumentException("A column marked as primary key cannot be nullable.");
+
+		if (explicitlyNull && markedNotNull)
+			throw new ArgumentException("A column cannot be marked as [NotNull] while having an explicitly nullable property type.");
+
+		IsNullable = explicitlyNull || ((createFlags.HasFlag(CreateFlags.ImplicitNullable) || nullabilityInfo.WriteState == NullabilityState.Unknown) && !(isPk || markedNotNull));
+		
+		MaxStringLength = propertyInfo.GetCustomAttribute<MaxLengthAttribute>()?.Value;
+	}
+
+	internal ColumnDefinition(
+		string name,
+		Type clrType)
+	{
+		Name = name;
+		ColumnType = clrType;
+	}
+
+	public ColumnDefinition WithName(string name)
+	{
+		Name = name;
+		return this;
+	}
+
+	public ColumnDefinition WithPrimaryKey(int order = 0)
+	{
+		PKOrder = order;
+		return this;
+	}
+
+	public ColumnDefinition WithAutoIncrement(bool value = true)
+	{
+		IsAutoIncrement = value && !IsAutoGuid;
+		IsAutoGuid = value && ColumnType == typeof(Guid);
+		return this;
+	}
+
+	public ColumnDefinition WithCollation(string collation)
+	{
+		Collation = collation;
+		return this;
+	}
+
+	public ColumnDefinition WithStoreAsText(bool value = true, string? format = null)
+	{
+		StoreAsText = value;
+		StoreAsTextFormat = format;
+		return this;
+	}
+
+	public ColumnDefinition WithNullable(bool value = true)
+	{
+		IsNullable = value;
+		return this; }
+
+	internal TableColumn Build()
+	{
+		return new TableColumn(
+			Name,
+			PropertyInfo,
+			ColumnType,
+			SqliteType ?? ComputeSqlCellType(),
+			Collation,
+			IsAutoIncrement,
+			IsAutoGuid,
+			PKOrder,
+			Indices,
+			IsNullable,
+			MaxStringLength,
+			StoreAsText,
+			StoreAsTextFormat);
+	}
+
+	internal SqliteCellType ComputeSqlCellType()
+	{
+		if (ColumnType == typeof(bool) || ColumnType == typeof(byte) || ColumnType == typeof(ushort) || ColumnType == typeof(sbyte) || ColumnType == typeof(short) || ColumnType == typeof(int) || ColumnType == typeof(uint) || ColumnType == typeof(long) || ColumnType == typeof(ulong))
 		{
 			return SqliteCellType.Integer;
 		}
-		else if (clrType == typeof(Single) || clrType == typeof(Double) || clrType == typeof(Decimal))
+		else if (ColumnType == typeof(float) || ColumnType == typeof(double) || ColumnType == typeof(decimal))
 		{
 			return SqliteCellType.Real;
 		}
-		else if (clrType == typeof(string) || clrType == typeof(StringBuilder) || clrType == typeof(Uri) || clrType == typeof(UriBuilder))
+		else if (ColumnType == typeof(string) || ColumnType == typeof(StringBuilder) || ColumnType == typeof(Uri) || ColumnType == typeof(UriBuilder))
 		{
 			return SqliteCellType.Text;
 		}
-		else if (clrType == typeof(TimeSpan) || clrType == typeof(DateTime) || clrType == typeof(DateTimeOffset) || clrType == typeof(TimeOnly) || clrType == typeof(DateOnly) || clrType.GetTypeInfo().IsEnum)
+		else if (ColumnType == typeof(TimeSpan) || ColumnType == typeof(DateTime) || ColumnType == typeof(DateTimeOffset) || ColumnType == typeof(TimeOnly) || ColumnType == typeof(DateOnly) || ColumnType.GetTypeInfo().IsEnum)
 		{
-			return p.StoreAsText ? SqliteCellType.Text : SqliteCellType.Integer;
+			return StoreAsText ? SqliteCellType.Text : SqliteCellType.Integer;
 		}
-		else if (clrType == typeof(byte[]))
+		else if (ColumnType == typeof(byte[]))
 		{
 			return SqliteCellType.Blob;
 		}
-		else if (clrType == typeof(Guid))
+		else if (ColumnType == typeof(Guid))
 		{
-			// TODO: add StoreAsText for blob
 			return SqliteCellType.Text;
 		}
-		else if (clrType == typeof(object))
+		else if (ColumnType == typeof(object))
 		{
 			return SqliteCellType.Any;
 		}
 		else
 		{
-			throw new NotSupportedException("Unable to handle column type " + clrType);
+			throw new NotSupportedException("Unable to handle column type " + ColumnType);
 		}
 	}
+}
 
-	public static bool IsPK(MemberInfo p)
+public static class Orm
+{
+	public const string ImplicitPkName = "Id";
+
+	public static Type GetType(object? obj)
 	{
-		return p.GetCustomAttribute<PrimaryKeyAttribute>() != null;
-	}
+		if (obj == null)
+			return typeof(object);
 
-	public static int? PKOrder(MemberInfo p)
-	{
-		return p.GetCustomAttribute<PrimaryKeyAttribute>()?.Order;
-	}
+		if (obj is IReflectableType rt)
+			return rt.GetTypeInfo().AsType();
 
-	public static string Collation(MemberInfo p)
-	{
-		return
-			(p.CustomAttributes
-				.Where(x => typeof(CollationAttribute) == x.AttributeType)
-				.Select(x => {
-					var args = x.ConstructorArguments;
-					return args.Count > 0 ? ((args[0].Value as string) ?? "") : "";
-				})
-				.FirstOrDefault()) ?? "";
-	}
-
-	public static bool IsAutoInc(MemberInfo p)
-	{
-		return p.CustomAttributes.Any(x => x.AttributeType == typeof(AutoIncrementAttribute));
-	}
-
-	public static FieldInfo GetField(
-		[DynamicallyAccessedMembers (DynamicallyAccessedMemberTypes.All)]
-		TypeInfo t,
-		string name)
-	{
-		var f = t.GetDeclaredField(name);
-		if (f != null)
-			return f;
-		return GetField(t.BaseType.GetTypeInfo(), name);
-	}
-
-	public static PropertyInfo GetProperty(
-		[DynamicallyAccessedMembers (DynamicallyAccessedMemberTypes.All)]
-		TypeInfo t,
-		string name)
-	{
-		var f = t.GetDeclaredProperty(name);
-		if (f != null)
-			return f;
-		return GetProperty(t.BaseType.GetTypeInfo(), name);
-	}
-
-	public static IEnumerable<IndexedAttribute> GetIndices(MemberInfo p)
-	{
-		return p.GetCustomAttributes<IndexedAttribute>();
-	}
-
-	public static int? MaxStringLength(MemberInfo p)
-	{
-		return p.GetCustomAttributes<MaxLengthAttribute>().FirstOrDefault()?.Value;
-	}
-
-	public static int? MaxStringLength(PropertyInfo p) => MaxStringLength((MemberInfo)p);
-
-	public static bool IsMarkedNotNull(MemberInfo p)
-	{
-		return p.CustomAttributes.Any(x => x.AttributeType == typeof(NotNullAttribute));
+		return obj.GetType();
 	}
 }

@@ -30,7 +30,7 @@ internal class FastColumnSetter
 	///
 	/// If no fast setter is available for the requested column (enums in particular cause headache), then this function returns null.
 	/// </returns>
-	internal static Action<object, Sqlite3Statement, int> GetFastSetter<T>(SQLiteConnection conn, TableMapping.Column column)
+	internal static Action<object, Sqlite3Statement, int> GetFastSetter<T>(SQLiteConnection conn, TableColumn column)
 	{
 		Action<object, Sqlite3Statement, int> fastSetter = null;
 
@@ -275,12 +275,12 @@ internal class FastColumnSetter
 	///
 	/// Note that this is identical to CreateTypedSetterDelegate(), but has an extra check to see if it should create a nullable version of the delegate.
 	/// </summary>
-	/// <typeparam name="ObjectType">The type of the object whose member column is being set</typeparam>
-	/// <typeparam name="ColumnMemberType">The CLR type of the member in the object which corresponds to the given SQLite columnn</typeparam>
+	/// <typeparam name="TObjectType">The type of the object whose member column is being set</typeparam>
+	/// <typeparam name="TColumnMemberType">The CLR type of the member in the object which corresponds to the given SQLite columnn</typeparam>
 	/// <param name="column">The column mapping that identifies the target member of the destination object</param>
 	/// <param name="getColumnValue">A lambda that can be used to retrieve the column value at query-time</param>
 	/// <returns>A strongly-typed delegate</returns>
-	private static Action<object, Sqlite3Statement, int> CreateNullableTypedSetterDelegate<ObjectType, ColumnMemberType>(TableMapping.Column column, Func<Sqlite3Statement, int, ColumnMemberType> getColumnValue) where ColumnMemberType : struct
+	private static Action<object, Sqlite3Statement, int> CreateNullableTypedSetterDelegate<TObjectType, TColumnMemberType>(TableColumn column, Func<Sqlite3Statement, int, TColumnMemberType> getColumnValue) where TColumnMemberType : struct
 	{
 		var clrTypeInfo = column.PropertyInfo.PropertyType.GetTypeInfo();
 		bool isNullable = false;
@@ -292,38 +292,38 @@ internal class FastColumnSetter
 
 		if (isNullable)
 		{
-			var setProperty = (Action<ObjectType, ColumnMemberType?>)Delegate.CreateDelegate(
-				typeof(Action<ObjectType, ColumnMemberType?>), null,
+			var setProperty = (Action<TObjectType, TColumnMemberType?>)Delegate.CreateDelegate(
+				typeof(Action<TObjectType, TColumnMemberType?>), null,
 				column.PropertyInfo.GetSetMethod());
 
 			return (o, stmt, i) => {
 				var colType = SQLite3Native.ColumnType(stmt, i);
 				if (colType != SQLite3Native.ColType.Null)
-					setProperty.Invoke((ObjectType)o, getColumnValue.Invoke(stmt, i));
+					setProperty.Invoke((TObjectType)o, getColumnValue.Invoke(stmt, i));
 			};
 		}
 
-		return CreateTypedSetterDelegate<ObjectType, ColumnMemberType>(column, getColumnValue);
+		return CreateTypedSetterDelegate<TObjectType, TColumnMemberType>(column, getColumnValue);
 	}
 
 	/// <summary>
 	/// This creates a strongly typed delegate that will permit fast setting of column values given a Sqlite3Statement and a column index.
 	/// </summary>
-	/// <typeparam name="ObjectType">The type of the object whose member column is being set</typeparam>
-	/// <typeparam name="ColumnMemberType">The CLR type of the member in the object which corresponds to the given SQLite columnn</typeparam>
+	/// <typeparam name="TObjectType">The type of the object whose member column is being set</typeparam>
+	/// <typeparam name="TColumnMemberType">The CLR type of the member in the object which corresponds to the given SQLite column</typeparam>
 	/// <param name="column">The column mapping that identifies the target member of the destination object</param>
 	/// <param name="getColumnValue">A lambda that can be used to retrieve the column value at query-time</param>
 	/// <returns>A strongly-typed delegate</returns>
-	private static Action<object, Sqlite3Statement, int> CreateTypedSetterDelegate<ObjectType, ColumnMemberType>(TableMapping.Column column, Func<Sqlite3Statement, int, ColumnMemberType> getColumnValue)
+	private static Action<object, Sqlite3Statement, int> CreateTypedSetterDelegate<TObjectType, TColumnMemberType>(TableColumn column, Func<Sqlite3Statement, int, TColumnMemberType> getColumnValue)
 	{
-		var setProperty = (Action<ObjectType, ColumnMemberType>)Delegate.CreateDelegate(
-			typeof(Action<ObjectType, ColumnMemberType>), null,
+		var setProperty = (Action<TObjectType, TColumnMemberType>)Delegate.CreateDelegate(
+			typeof(Action<TObjectType, TColumnMemberType>), null,
 			column.PropertyInfo.GetSetMethod());
 
 		return (o, stmt, i) => {
 			var colType = SQLite3Native.ColumnType(stmt, i);
 			if (colType != SQLite3Native.ColType.Null)
-				setProperty.Invoke((ObjectType)o, getColumnValue.Invoke(stmt, i));
+				setProperty.Invoke((TObjectType)o, getColumnValue.Invoke(stmt, i));
 		};
 	}
 }

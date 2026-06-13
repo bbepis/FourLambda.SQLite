@@ -11,7 +11,7 @@ public class DbCommandTest : DBTestHarness
 		Database.Insert(b);
 
 		var test = Database.CreateCommand("select * from Product")
-			.ExecuteDeferredQuery<Product>(new TableMapping(typeof(Product))).ToList();
+			.ExecuteDeferredQuery<Product>(TableMappingBuilder.FromType<Product>().Build()).ToList();
 
 
 		Assert.AreEqual(test.Count, 1);
@@ -28,7 +28,7 @@ public class DbCommandTest : DBTestHarness
 		Database.Insert(b);
 
 		var test = Database.CreateCommand("select * from Product")
-			.ExecuteDeferredQuery<object>(new TableMapping(typeof(Product))).ToList();
+			.ExecuteDeferredQuery<object>(TableMappingBuilder.FromType<Product>().Build()).ToList();
 
 		Assert.AreEqual(test.Count, 1);
 	}

@@ -47,7 +47,7 @@ public class SQLiteException : Exception
 
 public class NotNullConstraintViolationException : SQLiteException
 {
-	public IEnumerable<TableMapping.Column> Columns { get; protected set; }
+	public IEnumerable<TableColumn> Columns { get; protected set; }
 
 	protected NotNullConstraintViolationException(SQLite3Native.Result r, string message)
 		: this(r, message, null, null)
@@ -252,7 +252,7 @@ public interface ISQLiteConnection : IDisposable
 	TableMapping GetMapping<
 		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
 		T>(CreateFlags createFlags = CreateFlags.None);
-	List<SQLiteConnection.ColumnInfo> GetTableInfo(string tableName);
+
 	[RequiresUnreferencedCode("This method requires ''DynamicallyAccessedMemberTypes.All' on the runtime type of 'obj'.")]
 	int Insert(object obj);
 	int Insert(
@@ -309,7 +309,6 @@ public interface ISQLiteConnection : IDisposable
 /// <summary>
 /// An open connection to a SQLite database.
 /// </summary>
-[Preserve(AllMembers = true)]
 public partial class SQLiteConnection : IDisposable
 {
 	private bool _open;
@@ -410,7 +409,7 @@ public partial class SQLiteConnection : IDisposable
 		Handle = handle;
 		if (r != SQLite3Native.Result.OK)
 		{
-			throw SQLiteException.New(r, string.Format("Could not open database file: {0} ({1})", DatabasePath, r));
+			throw SQLiteException.New(r, $"Could not open database file: {DatabasePath} ({r})");
 		}
 		_open = true;
 
@@ -592,13 +591,13 @@ public partial class SQLiteConnection : IDisposable
 			{
 				if (createFlags != CreateFlags.None && createFlags != map.CreateFlags)
 				{
-					map = new TableMapping(type, createFlags);
+					map = TableMappingBuilder.FromType(type, createFlags).Build();
 					_mappings[key] = map;
 				}
 			}
 			else
 			{
-				map = new TableMapping(type, createFlags);
+				map = TableMappingBuilder.FromType(type, createFlags).Build();
 				_mappings.Add(key, map);
 			}
 		}
@@ -654,7 +653,7 @@ public partial class SQLiteConnection : IDisposable
 	/// </param>
 	public int DropTable(TableMapping map)
 	{
-		var query = string.Format("drop table if exists \"{0}\"", map.TableName);
+		var query = $"drop table if exists \"{map.TableName}\"";
 		return Execute(query);
 	}
 
@@ -741,7 +740,7 @@ public partial class SQLiteConnection : IDisposable
 			var decls = new List<string>();
 
 			foreach (var column in map.Columns)
-				decls.Add(Orm.SqlDecl(column, isCompositePk));
+				decls.Add(column.GetCreationSql(isCompositePk));
 
 			if (isCompositePk)
 				decls.Add($"PRIMARY KEY ({string.Join(", ", map.PrimaryKeyColumns.Select(x => x.Name))})");
@@ -1016,58 +1015,29 @@ public partial class SQLiteConnection : IDisposable
 		return CreateIndex(map.TableName, colName, unique);
 	}
 
-	[Preserve(AllMembers = true)]
-	public class ColumnInfo
-	{
-		//			public int cid { get; set; }
-
-		[Column("name")]
-		public string Name { get; set; }
-
-		//			[Column ("type")]
-		//			public string ColumnType { get; set; }
-
-		public int notnull { get; set; }
-
-		//			public string dflt_value { get; set; }
-
-		//			public int pk { get; set; }
-
-		public override string ToString()
-		{
-			return Name;
-		}
-	}
-
 	/// <summary>
 	/// Query the built-in sqlite table_info table for a specific tables columns.
 	/// </summary>
-	/// <returns>The columns contains in the table.</returns>
+	/// <returns>The columns contained in the table.</returns>
 	/// <param name="tableName">Table name.</param>
-	public List<ColumnInfo> GetTableInfo(string tableName)
+	public List<ColumnDefinition> GetTableInfo(string tableName)
 	{
-		var query = "pragma table_info(\"" + tableName + "\")";
-		return Query<ColumnInfo>(query);
+		var query = "select name, \"notnull\" from pragma_table_info(\'" + tableName + "\')";
+		return Query<(string name, int notnull)>(query)
+			.Select(x =>
+				new ColumnDefinition(x.name, typeof(object))
+				{
+					IsNullable = x.notnull == 0
+				})
+			.ToList();
 	}
 
-	void MigrateTable(TableMapping map, List<ColumnInfo> existingCols)
+	void MigrateTable(TableMapping map, List<ColumnDefinition> existingCols)
 	{
-		var toBeAdded = new List<TableMapping.Column>();
-
-		foreach (var p in map.Columns)
-		{
-			var found = false;
-			foreach (var c in existingCols)
-			{
-				found = (string.Compare(p.Name, c.Name, StringComparison.OrdinalIgnoreCase) == 0);
-				if (found)
-					break;
-			}
-			if (!found)
-			{
-				toBeAdded.Add(p);
-			}
-		}
+		var toBeAdded = map.Columns
+			.Where(newCol => 
+				existingCols.All(existing => !string.Equals(existing.Name, newCol.Name, StringComparison.OrdinalIgnoreCase)))
+			.ToArray();
 
 		if (toBeAdded.Any(x => x.IsPK))
 		{
@@ -1076,7 +1046,7 @@ public partial class SQLiteConnection : IDisposable
 
 		foreach (var p in toBeAdded)
 		{
-			var addCol = $"alter table \"{map.TableName}\" add column {Orm.SqlDecl(p, map.PrimaryKeyColumns.Length > 1)}";
+			var addCol = $"alter table \"{map.TableName}\" add column {p.GetCreationSql(map.PrimaryKeyColumns.Length > 1)}";
 			Execute(addCol);
 		}
 	}
@@ -1182,7 +1152,7 @@ public partial class SQLiteConnection : IDisposable
 		{
 			_sw.Stop();
 			_elapsedMilliseconds += _sw.ElapsedMilliseconds;
-			Tracer?.Invoke(string.Format("Finished in {0} ms ({1:0.0} s total)", _sw.ElapsedMilliseconds, _elapsedMilliseconds / 1000.0));
+			Tracer?.Invoke($"Finished in {_sw.ElapsedMilliseconds} ms ({_elapsedMilliseconds / 1000.0:0.0} s total)");
 		}
 
 		return r;
@@ -2380,7 +2350,7 @@ public partial class SQLiteConnection : IDisposable
 			throw new NotSupportedException("Cannot delete " + map.TableName + ": it has no PK");
 		}
 
-		var q = string.Format("delete from \"{0}\" {1}", map.TableName, map.PKWhereSql);
+		var q = $"delete from \"{map.TableName}\" {map.PKWhereSql}";
 
 		var count = Execute(q, map.PrimaryKeyColumns.Select(x => x.GetValue(objectToDelete)).ToArray());
 
@@ -2424,7 +2394,7 @@ public partial class SQLiteConnection : IDisposable
 		{
 			throw new NotSupportedException("Cannot delete " + map.TableName + ": it has no PK");
 		}
-		var q = string.Format("delete from \"{0}\" {1}", map.TableName, map.PKWhereSql);
+		var q = $"delete from \"{map.TableName}\" {map.PKWhereSql}";
 		var count = Execute(q, primaryKey);
 
 		return count;
@@ -2462,7 +2432,7 @@ public partial class SQLiteConnection : IDisposable
 	/// </returns>
 	public int DeleteAll(TableMapping map)
 	{
-		var query = string.Format("delete from \"{0}\"", map.TableName);
+		var query = $"delete from \"{map.TableName}\"";
 		var count = Execute(query);
 
 		return count;
