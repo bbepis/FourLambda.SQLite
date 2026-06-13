@@ -100,7 +100,7 @@ public class NotNullAttributeTest : DBTestHarness
 			}
 			catch (SQLiteException ex)
 			{
-				if (SQLite3.LibVersionNumber() < 3007017 && ex.Result == SQLite3.Result.Constraint)
+				if (SQLite3Native.LibVersionNumber() < 3007017 && ex.Result == SQLite3Native.Result.Constraint)
 				{
 					Console.WriteLine(
 						"Detailed constraint information is only available in SQLite3 version 3.7.17 and above.");

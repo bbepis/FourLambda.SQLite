@@ -112,7 +112,7 @@ public class TransactionTest : DBTestHarness
 		Database.Tracer = m =>
 		{
 			if (m == "Executing: commit")
-				throw SQLiteException.New(SQLite3.Result.Busy, "Make commit fail");
+				throw SQLiteException.New(SQLite3Native.Result.Busy, "Make commit fail");
 			if (m == "Executing: rollback")
 				rollbacks++;
 		};
@@ -120,7 +120,7 @@ public class TransactionTest : DBTestHarness
 		Database.Insert(new TestObj());
 
 		var ex = Assert.Throws<SQLiteException>(Database.Commit);
-		Assert.AreEqual(SQLite3.Result.Busy, ex.Result);
+		Assert.AreEqual(SQLite3Native.Result.Busy, ex.Result);
 
 		Database.Trace = false;
 
@@ -155,7 +155,7 @@ public class TransactionTest : DBTestHarness
 		{
 			//Console.WriteLine (m);
 			if (m.StartsWith("Executing: release"))
-				throw SQLiteException.New(SQLite3.Result.Busy, "Make release fail");
+				throw SQLiteException.New(SQLite3Native.Result.Busy, "Make release fail");
 			if (m == "Executing: rollback")
 				rollbacks++;
 		};
@@ -163,7 +163,7 @@ public class TransactionTest : DBTestHarness
 		Database.Insert(new TestObj());
 
 		var ex = Assert.Throws<SQLiteException>(() => Database.Release(sp0));
-		Assert.AreEqual(SQLite3.Result.Busy, ex.Result);
+		Assert.AreEqual(SQLite3Native.Result.Busy, ex.Result);
 
 		Database.Trace = false;
 
