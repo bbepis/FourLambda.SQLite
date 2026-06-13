@@ -420,18 +420,6 @@ public class SQLiteCommand(SQLiteConnection conn)
 			{
 				SQLite3Native.BindText(stmt, index, ((Guid)value).ToString(), 72, NegativePointer);
 			}
-			else if (value is Uri)
-			{
-				SQLite3Native.BindText(stmt, index, ((Uri)value).ToString(), -1, NegativePointer);
-			}
-			else if (value is StringBuilder)
-			{
-				SQLite3Native.BindText(stmt, index, ((StringBuilder)value).ToString(), -1, NegativePointer);
-			}
-			else if (value is UriBuilder)
-			{
-				SQLite3Native.BindText(stmt, index, ((UriBuilder)value).ToString(), -1, NegativePointer);
-			}
 			else
 			{
 				// Now we could possibly get an enum, retrieve cached info
@@ -627,21 +615,6 @@ public class SQLiteCommand(SQLiteConnection conn)
 			{
 				var text = SQLite3Native.ColumnString(stmt, index);
 				return new Guid(text);
-			}
-			else if (clrType == typeof(Uri))
-			{
-				var text = SQLite3Native.ColumnString(stmt, index);
-				return new Uri(text);
-			}
-			else if (clrType == typeof(StringBuilder))
-			{
-				var text = SQLite3Native.ColumnString(stmt, index);
-				return new StringBuilder(text);
-			}
-			else if (clrType == typeof(UriBuilder))
-			{
-				var text = SQLite3Native.ColumnString(stmt, index);
-				return new UriBuilder(text);
 			}
 			else
 			{

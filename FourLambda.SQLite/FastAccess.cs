@@ -242,27 +242,6 @@ internal class FastColumnSetter
 				return new Guid(text);
 			});
 		}
-		else if (clrType == typeof(Uri))
-		{
-			fastSetter = CreateTypedSetterDelegate<T, Uri>(column, (stmt, index) => {
-				var text = SQLite3Native.ColumnString(stmt, index);
-				return new Uri(text);
-			});
-		}
-		else if (clrType == typeof(StringBuilder))
-		{
-			fastSetter = CreateTypedSetterDelegate<T, StringBuilder>(column, (stmt, index) => {
-				var text = SQLite3Native.ColumnString(stmt, index);
-				return new StringBuilder(text);
-			});
-		}
-		else if (clrType == typeof(UriBuilder))
-		{
-			fastSetter = CreateTypedSetterDelegate<T, UriBuilder>(column, (stmt, index) => {
-				var text = SQLite3Native.ColumnString(stmt, index);
-				return new UriBuilder(text);
-			});
-		}
 		else
 		{
 			// NOTE: Will fall back to the slow setter method in the event that we are unable to create a fast setter delegate for a particular column type

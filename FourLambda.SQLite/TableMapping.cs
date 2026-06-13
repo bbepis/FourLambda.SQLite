@@ -644,11 +644,11 @@ public class ColumnDefinition
 		{
 			return SqliteCellType.Real;
 		}
-		else if (ColumnType == typeof(string) || ColumnType == typeof(StringBuilder) || ColumnType == typeof(Uri) || ColumnType == typeof(UriBuilder))
+		else if (ColumnType == typeof(string))
 		{
 			return SqliteCellType.Text;
 		}
-		else if (ColumnType == typeof(TimeSpan) || ColumnType == typeof(DateTime) || ColumnType == typeof(DateTimeOffset) || ColumnType == typeof(TimeOnly) || ColumnType == typeof(DateOnly) || ColumnType.GetTypeInfo().IsEnum)
+		else if (ColumnType == typeof(TimeSpan) || ColumnType == typeof(DateTime) || ColumnType == typeof(DateTimeOffset) || ColumnType == typeof(TimeOnly) || ColumnType == typeof(DateOnly) || ColumnType.IsEnum)
 		{
 			return StoreAsText ? SqliteCellType.Text : SqliteCellType.Integer;
 		}
