@@ -68,7 +68,7 @@ public class IgnoreTest : DBTestHarness
 
 		Database.Insert(o);
 
-		var oo = Database.Get<TestObj>(o.Id);
+		var oo = Database.Find<TestObj>(o.Id);
 
 		Assert.AreEqual("Hello", oo.Text);
 		Assert.AreEqual(null, oo.IgnoredText);

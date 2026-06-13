@@ -47,13 +47,10 @@ public class InsertTest : DBTestHarness
 	public void InsertALot()
 	{
 		var n = 10000;
-		var q = from i in Enumerable.Range(1, n)
-			select new TestObj
-			{
-				Text = "I am"
-			};
-		var objs = q.ToArray();
-		Database.Trace = false;
+
+		var objs = Enumerable.Range(1, n)
+			.Select(i => new TestObj { Text = "I am" })
+			.ToArray();
 
 		var sw = new Stopwatch();
 		sw.Start();
@@ -64,7 +61,13 @@ public class InsertTest : DBTestHarness
 
 		Assert.AreEqual(numIn, n, "Num inserted must = num objects");
 
+		var numCount = Database.CreateCommand("select count(*) from TestObj").ExecuteScalar<int>();
+
+		Assert.AreEqual(numCount, n, "Num counted must = num objects");
+
 		var inObjs = Database.CreateCommand("select * from TestObj").ExecuteQuery<TestObj>().ToArray();
+
+		Assert.AreEqual(inObjs.Length, n, "Num retrieved must = num objects");
 
 		for (var i = 0; i < inObjs.Length; i++)
 		{
@@ -72,21 +75,15 @@ public class InsertTest : DBTestHarness
 			Assert.AreEqual(i + 1, inObjs[i].Id);
 			Assert.AreEqual("I am", inObjs[i].Text);
 		}
-
-		var numCount = Database.CreateCommand("select count(*) from TestObj").ExecuteScalar<int>();
-
-		Assert.AreEqual(numCount, n, "Num counted must = num objects");
 	}
 
 	[Test]
 	public void InsertTraces()
 	{
 		var oldTracer = Database.Tracer;
-		var oldTrace = Database.Trace;
 
 		var traces = new List<string>();
 		Database.Tracer = traces.Add;
-		Database.Trace = true;
 
 		var obj1 = new TestObj { Text = "GLaDOS loves tracing!" };
 		var numIn1 = Database.Insert(obj1);
@@ -95,7 +92,6 @@ public class InsertTest : DBTestHarness
 		Assert.AreEqual(1, traces.Count);
 
 		Database.Tracer = oldTracer;
-		Database.Trace = oldTrace;
 	}
 
 	[Test]
@@ -146,12 +142,12 @@ public class InsertTest : DBTestHarness
 
 		Assert.Throws<SQLiteException>(() => Database.Insert(obj2), "Expected unique constraint violation");
 
-		Database.Insert(obj2, "OR REPLACE");
+		Database.Insert(obj2, InsertConflictAction.Replace);
 
 
 		Assert.Throws<SQLiteException>(() => Database.Insert(obj3), "Expected unique constraint violation");
 
-		Database.Insert(obj3, "OR IGNORE");
+		Database.Insert(obj3, InsertConflictAction.Ignore);
 
 		var result = Database.Query<TestObj>("select * from TestObj2").ToList();
 		Assert.AreEqual(1, result.Count);
@@ -164,7 +160,7 @@ public class InsertTest : DBTestHarness
 		var obj = new OneColumnObj();
 		Database.Insert(obj);
 
-		var result = Database.Get<OneColumnObj>(1);
+		var result = Database.Find<OneColumnObj>(1);
 		Assert.AreEqual(1, result.Id);
 	}
 
@@ -194,10 +190,11 @@ public class InsertTest : DBTestHarness
 	{
 		var testObjects = Enumerable.Range(1, 20).Select(i => new UniqueObj { Id = i }).ToList();
 
-		Database.RunInTransaction(() =>
+		using (var scope = Database.CreateTransactionScope())
 		{
 			Database.InsertAll(testObjects);
-		});
+			scope.Commit();
+		}
 
 		Assert.AreEqual(testObjects.Count, Database.Table<UniqueObj>().Count());
 	}
@@ -210,10 +207,11 @@ public class InsertTest : DBTestHarness
 
 		Assert.Throws<SQLiteException>(() =>
 		{
-			Database.RunInTransaction(() =>
+			using (var scope = Database.CreateTransactionScope())
 			{
 				Database.InsertAll(testObjects);
-			});
+				scope.Commit();
+			}
 		});
 
 		Assert.AreEqual(0, Database.Table<UniqueObj>().Count());
@@ -227,7 +225,7 @@ public class InsertTest : DBTestHarness
 		Assert.AreEqual(20, Database.Table<TestObj>().Count());
 
 		var t = new TestObj { Id = 5, Text = "Foo" };
-		Database.InsertOrReplace(t);
+		Database.Insert(t, InsertConflictAction.Replace);
 
 		var r = (from x in Database.Table<TestObj>() orderby x.Id select x).ToList();
 		Assert.AreEqual(20, r.Count);

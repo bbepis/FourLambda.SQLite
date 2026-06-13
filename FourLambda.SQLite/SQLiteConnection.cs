@@ -1,25 +1,4 @@
-//
-// Copyright (c) 2009-2024 Krueger Systems, Inc.
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-// THE SOFTWARE.
-//
-
+using System.Data;
 using System.Diagnostics;
 using System.Linq.Expressions;
 using System.Runtime.CompilerServices;
@@ -30,65 +9,18 @@ using System.Runtime.CompilerServices;
 
 namespace FourLambda.SQLite;
 
-public class SQLiteException : Exception
-{
-	public SQLite3Native.Result Result { get; private set; }
-
-	protected SQLiteException(SQLite3Native.Result r, string message) : base(message)
-	{
-		Result = r;
-	}
-
-	public static SQLiteException New(SQLite3Native.Result r, string message)
-	{
-		return new SQLiteException(r, message);
-	}
-}
-
-public class NotNullConstraintViolationException : SQLiteException
-{
-	public IEnumerable<TableColumn> Columns { get; protected set; }
-
-	protected NotNullConstraintViolationException(SQLite3Native.Result r, string message)
-		: this(r, message, null, null)
-	{
-
-	}
-
-	protected NotNullConstraintViolationException(SQLite3Native.Result r, string message, TableMapping mapping, object obj)
-		: base(r, message)
-	{
-		if (mapping != null && obj != null)
-		{
-			this.Columns = from c in mapping.Columns
-				where c.IsNullable == false && c.GetValue(obj) == null
-				select c;
-		}
-	}
-
-	public static new NotNullConstraintViolationException New(SQLite3Native.Result r, string message)
-	{
-		return new NotNullConstraintViolationException(r, message);
-	}
-
-	public static NotNullConstraintViolationException New(SQLite3Native.Result r, string message, TableMapping mapping, object obj)
-	{
-		return new NotNullConstraintViolationException(r, message, mapping, obj);
-	}
-
-	public static NotNullConstraintViolationException New(SQLiteException exception, TableMapping mapping, object obj)
-	{
-		return new NotNullConstraintViolationException(exception.Result, exception.Message, mapping, obj);
-	}
-}
-
 [Flags]
 public enum SQLiteOpenFlags
 {
-	ReadOnly = 1, ReadWrite = 2, Create = 4,
-	Uri = 0x40, Memory = 0x80,
-	NoMutex = 0x8000, FullMutex = 0x10000,
-	SharedCache = 0x20000, PrivateCache = 0x40000,
+	ReadOnly = 1,
+	ReadWrite = 2,
+	Create = 4,
+	Uri = 0x40,
+	Memory = 0x80,
+	NoMutex = 0x8000,
+	FullMutex = 0x10000,
+	SharedCache = 0x20000,
+	PrivateCache = 0x40000,
 	ProtectionComplete = 0x00100000,
 	ProtectionCompleteUnlessOpen = 0x00200000,
 	ProtectionCompleteUntilFirstUserAuthentication = 0x00300000,
@@ -96,7 +28,7 @@ public enum SQLiteOpenFlags
 }
 
 [Flags]
-public enum CreateFlags
+public enum TableCreateFlags
 {
 	/// <summary>
 	/// Use the default creation options
@@ -127,202 +59,21 @@ public enum CreateFlags
 	FullTextSearch4 = 0x200
 }
 
-public interface ISQLiteConnection : IDisposable
-{
-	Sqlite3DatabaseHandle Handle { get; }
-	string DatabasePath { get; }
-	int LibVersionNumber { get; }
-	bool TimeExecution { get; set; }
-	bool Trace { get; set; }
-	Action<string> Tracer { get; set; }
-	TimeSpan BusyTimeout { get; set; }
-	IEnumerable<TableMapping> TableMappings { get; }
-	bool IsInTransaction { get; }
-
-	void Backup(string destinationDatabasePath, string databaseName = "main");
-	void BeginTransaction();
-	void Close();
-	void Commit();
-	SQLiteCommand CreateCommand(string cmdText, params object[] ps);
-	SQLiteCommand CreateCommand(string cmdText, Dictionary<string, object> args);
-	int CreateIndex(string indexName, string tableName, string[] columnNames, bool unique = false);
-	int CreateIndex(string indexName, string tableName, string columnName, bool unique = false);
-	int CreateIndex(string tableName, string columnName, bool unique = false);
-	int CreateIndex(string tableName, string[] columnNames, bool unique = false);
-	int CreateIndex<
-		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
-		T>(Expression<Func<T, object>> property, bool unique = false);
-	CreateTableResult CreateTable<
-		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
-		T>(CreateFlags createFlags = CreateFlags.None);
-	CreateTableResult CreateTable(
-		[DynamicallyAccessedMembers (DynamicallyAccessedMemberTypes.All)]
-		Type ty, CreateFlags createFlags = CreateFlags.None);
-	CreateTablesResult CreateTables<
-		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
-		T,
-		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
-		T2>(CreateFlags createFlags = CreateFlags.None)
-		where T : new()
-		where T2 : new();
-	CreateTablesResult CreateTables<
-		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
-		T,
-		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
-		T2,
-		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
-		T3>(CreateFlags createFlags = CreateFlags.None)
-		where T : new()
-		where T2 : new()
-		where T3 : new();
-	CreateTablesResult CreateTables<
-		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
-		T,
-		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
-		T2,
-		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
-		T3,
-		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
-		T4>(CreateFlags createFlags = CreateFlags.None)
-		where T : new()
-		where T2 : new()
-		where T3 : new()
-		where T4 : new();
-	CreateTablesResult CreateTables<
-		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
-		T,
-		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
-		T2,
-		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
-		T3,
-		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
-		T4,
-		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
-		T5>(CreateFlags createFlags = CreateFlags.None)
-		where T : new()
-		where T2 : new()
-		where T3 : new()
-		where T4 : new()
-		where T5 : new();
-	[RequiresUnreferencedCode("This method requires 'DynamicallyAccessedMemberTypes.All' on each input 'Type' instance.")]
-	CreateTablesResult CreateTables(CreateFlags createFlags = CreateFlags.None, params Type[] types);
-	IEnumerable<T> DeferredQuery<
-		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
-		T>(string query, params object[] args) where T : new();
-	IEnumerable<object> DeferredQuery(TableMapping map, string query, params object[] args);
-	[RequiresUnreferencedCode("This method requires ''DynamicallyAccessedMemberTypes.All' on the runtime type of 'objectToDelete'.")]
-	int Delete(object objectToDelete);
-	int Delete<
-		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
-		T>(object primaryKey);
-	int Delete(object primaryKey, TableMapping map);
-	int DeleteAll<
-		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
-		T>();
-	int DeleteAll(TableMapping map);
-	int DropTable<
-		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
-		T>();
-	int DropTable(TableMapping map);
-	void EnableLoadExtension(bool enabled);
-	void EnableWriteAheadLogging();
-	int Execute(string query, params object[] args);
-	T ExecuteScalar<T>(string query, params object[] args);
-	T Find<
-		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
-		T>(object pk) where T : new();
-	object Find(object pk, TableMapping map);
-	T Find<
-		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
-		T>(Expression<Func<T, bool>> predicate) where T : new();
-	T FindWithQuery<
-		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
-		T>(string query, params object[] args) where T : new();
-	object FindWithQuery(TableMapping map, string query, params object[] args);
-	T Get<
-		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
-		T>(object pk) where T : new();
-	object Get(object pk, TableMapping map);
-	T Get<
-		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
-		T>(Expression<Func<T, bool>> predicate) where T : new();
-	TableMapping GetMapping(
-		[DynamicallyAccessedMembers (DynamicallyAccessedMemberTypes.All)]
-		Type type, CreateFlags createFlags = CreateFlags.None);
-	TableMapping GetMapping<
-		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
-		T>(CreateFlags createFlags = CreateFlags.None);
-
-	[RequiresUnreferencedCode("This method requires ''DynamicallyAccessedMemberTypes.All' on the runtime type of 'obj'.")]
-	int Insert(object obj);
-	int Insert(
-		object obj,
-		[DynamicallyAccessedMembers (DynamicallyAccessedMemberTypes.All)]
-		Type objType);
-	[RequiresUnreferencedCode("This method requires ''DynamicallyAccessedMemberTypes.All' on the runtime type of 'obj'.")]
-	int Insert(object obj, string extra);
-	int Insert(
-		object obj,
-		string extra,
-		[DynamicallyAccessedMembers (DynamicallyAccessedMemberTypes.All)]
-		Type objType);
-	[RequiresUnreferencedCode("This method requires ''DynamicallyAccessedMemberTypes.All' on the runtime type of all objects in 'objects'.")]
-	int InsertAll(IEnumerable objects, bool runInTransaction = true);
-	[RequiresUnreferencedCode("This method requires ''DynamicallyAccessedMemberTypes.All' on the runtime type of all objects in 'objects'.")]
-	int InsertAll(IEnumerable objects, string extra, bool runInTransaction = true);
-	int InsertAll(
-		IEnumerable objects,
-		[DynamicallyAccessedMembers (DynamicallyAccessedMemberTypes.All)]
-		Type objType,
-		bool runInTransaction = true);
-	[RequiresUnreferencedCode("This method requires ''DynamicallyAccessedMemberTypes.All' on the runtime type of 'obj'.")]
-	int InsertOrReplace(object obj);
-	int InsertOrReplace(
-		object obj,
-		[DynamicallyAccessedMembers (DynamicallyAccessedMemberTypes.All)]
-		Type objType);
-	List<T> Query<
-		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
-		T>(string query, params object[] args) where T : new();
-	List<object> Query(TableMapping map, string query, params object[] args);
-	List<T> QueryScalars<T>(string query, params object[] args);
-	void ReKey(string key);
-	void ReKey(byte[] key);
-	void Release(string savepoint);
-	void Rollback();
-	void RollbackTo(string savepoint);
-	void RunInTransaction(Action action);
-	string SaveTransactionPoint();
-	TableQuery<T> Table<
-		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
-		T>() where T : new();
-	[RequiresUnreferencedCode("This method requires ''DynamicallyAccessedMemberTypes.All' on the runtime type of 'obj'.")]
-	int Update(object obj);
-	int Update(
-		object obj,
-		[DynamicallyAccessedMembers (DynamicallyAccessedMemberTypes.All)]
-		Type objType);
-	[RequiresUnreferencedCode("This method requires ''DynamicallyAccessedMemberTypes.All' on the runtime type of all objects in 'objects'.")]
-	int UpdateAll(IEnumerable objects, bool runInTransaction = true);
-}
-
 /// <summary>
 /// An open connection to a SQLite database.
 /// </summary>
-public partial class SQLiteConnection : IDisposable
+public class SQLiteConnection : IDisposable
 {
 	private bool _open;
-	private TimeSpan _busyTimeout;
-	readonly static Dictionary<string, TableMapping> _mappings = new Dictionary<string, TableMapping>();
-	private System.Diagnostics.Stopwatch _sw;
-	private long _elapsedMilliseconds = 0;
 
-	private int _transactionDepth = 0;
-	private Random _rand = new Random();
+	private Stopwatch _sw = new();
+	private long _elapsedMilliseconds = 0;
+	internal Action<string>? Tracer;
+
+	static readonly Sqlite3DatabaseHandle NullHandle = IntPtr.Zero;
+	static readonly Sqlite3BackupHandle NullBackupHandle = IntPtr.Zero;
 
 	public Sqlite3DatabaseHandle Handle { get; private set; }
-	static readonly Sqlite3DatabaseHandle NullHandle = default(Sqlite3DatabaseHandle);
-	static readonly Sqlite3BackupHandle NullBackupHandle = default(Sqlite3BackupHandle);
 
 	/// <summary>
 	/// Gets the database path used by this connection.
@@ -330,32 +81,36 @@ public partial class SQLiteConnection : IDisposable
 	public string DatabasePath { get; private set; }
 
 	/// <summary>
-	/// Gets the SQLite library version number. 3007014 would be v3.7.14
+	/// The version of the SQLite library this wrapper uses.
 	/// </summary>
-	public int LibVersionNumber { get; private set; }
+	public static Version LibraryVersion { get; }
+
 
 	/// <summary>
-	/// Whether Trace lines should be written that show the execution time of queries.
+	/// Sets a busy handler to sleep the specified amount of time when a table is locked.
+	/// The handler will sleep multiple times until a total time of <see cref="BusyTimeout"/> has accumulated.
 	/// </summary>
-	public bool TimeExecution { get; set; }
-
-	/// <summary>
-	/// Whether to write queries to <see cref="Tracer"/> during execution.
-	/// </summary>
-	public bool Trace { get; set; }
-
-	/// <summary>
-	/// The delegate responsible for writing trace lines.
-	/// </summary>
-	/// <value>The tracer.</value>
-	public Action<string> Tracer { get; set; }
-
-#if USE_SQLITEPCL_RAW && !NO_SQLITEPCL_RAW_BATTERIES
-		static SQLiteConnection ()
+	public TimeSpan BusyTimeout
+	{
+		get;
+		set
 		{
-			SQLitePCL.Batteries_V2.Init ();
+			field = value;
+
+			if (Handle != NullHandle)
+				SQLite3Native.BusyTimeout(Handle, (int)field.TotalMilliseconds);
 		}
-#endif
+	}
+
+	static SQLiteConnection()
+	{
+		var rawVersionNumber = SQLite3Native.LibVersionNumber();
+		LibraryVersion = new Version(
+			rawVersionNumber / 1_000_000 % 1000,
+			rawVersionNumber / 1_000 % 1000,
+			rawVersionNumber % 1000
+		);
+	}
 
 	/// <summary>
 	/// Constructs a new SQLiteConnection and opens a SQLite database specified by databasePath.
@@ -392,24 +147,18 @@ public partial class SQLiteConnection : IDisposable
 	{
 		if (connectionString == null)
 			throw new ArgumentNullException(nameof(connectionString));
-		if (connectionString.DatabasePath == null)
-			throw new InvalidOperationException("DatabasePath must be specified");
 
-		DatabasePath = connectionString.DatabasePath;
-
-		LibVersionNumber = SQLite3Native.LibVersionNumber();
-
-		Sqlite3DatabaseHandle handle;
+		DatabasePath = connectionString.DatabasePath ?? throw new InvalidOperationException("DatabasePath must be specified");
 
 		// open using the byte[]
 		// in the case where the path may include Unicode
 		// force open to using UTF-8 using sqlite3_open_v2
-		var r = SQLite3Native.Open(connectionString.DatabasePath, out handle, (int)connectionString.OpenFlags, connectionString.VfsName);
+		var result = SQLite3Native.Open(connectionString.DatabasePath, out var handle, (int)connectionString.OpenFlags, connectionString.VfsName);
 
 		Handle = handle;
-		if (r != SQLite3Native.Result.OK)
+		if (result != SQLite3Native.Result.OK)
 		{
-			throw SQLiteException.New(r, $"Could not open database file: {DatabasePath} ({r})");
+			throw new SQLiteException(result, $"Could not open database file: {DatabasePath} ({result})");
 		}
 		_open = true;
 
@@ -438,6 +187,24 @@ public partial class SQLiteConnection : IDisposable
 		}
 	}
 
+	public void SetDebugLogger(Action<string>? logger)
+	{
+		Tracer = logger;
+	}
+
+	/// <summary>
+	/// Enable or disable extension loading.
+	/// </summary>
+	public void EnableLoadExtension(bool enabled)
+	{
+		SQLite3Native.Result r = SQLite3Native.EnableLoadExtension(Handle, enabled ? 1 : 0);
+		if (r != SQLite3Native.Result.OK)
+		{
+			string msg = SQLite3Native.GetErrmsg(Handle);
+			throw new SQLiteException(r, msg);
+		}
+	}
+
 	/// <summary>
 	/// Enables the write ahead logging. WAL is significantly faster in most scenarios
 	/// by providing better concurrency and better disk IO performance than the normal
@@ -453,14 +220,17 @@ public partial class SQLiteConnection : IDisposable
 	/// </summary>
 	/// <returns>The quoted string.</returns>
 	/// <param name="unsafeString">The unsafe string to quote.</param>
-	static string Quote(string unsafeString)
+	public static string EscapeAndQuote(string unsafeString)
 	{
 		// TODO: Doesn't call sqlite3_mprintf("%Q", u) because we're waiting on https://github.com/ericsink/SQLitePCL.raw/issues/153
 		if (unsafeString == null)
 			return "NULL";
+
 		var safe = unsafeString.Replace("'", "''");
-		return "'" + safe + "'";
+		return $"'{safe}'";
 	}
+
+	#region Encryption
 
 	/// <summary>
 	/// Sets the key used to encrypt/decrypt the database with "pragma key = ...".
@@ -473,7 +243,7 @@ public partial class SQLiteConnection : IDisposable
 	{
 		if (key == null)
 			throw new ArgumentNullException(nameof(key));
-		var q = Quote(key);
+		var q = EscapeAndQuote(key);
 		ExecuteScalar<string>("pragma key = " + q);
 	}
 
@@ -502,7 +272,7 @@ public partial class SQLiteConnection : IDisposable
 	{
 		if (key == null)
 			throw new ArgumentNullException(nameof(key));
-		var q = Quote(key);
+		var q = EscapeAndQuote(key);
 		ExecuteScalar<string>("pragma rekey = " + q);
 	}
 
@@ -520,1030 +290,16 @@ public partial class SQLiteConnection : IDisposable
 		ExecuteScalar<string>("pragma rekey = \"x'" + s + "'\"");
 	}
 
-	/// <summary>
-	/// Enable or disable extension loading.
-	/// </summary>
-	public void EnableLoadExtension(bool enabled)
-	{
-		SQLite3Native.Result r = SQLite3Native.EnableLoadExtension(Handle, enabled ? 1 : 0);
-		if (r != SQLite3Native.Result.OK)
-		{
-			string msg = SQLite3Native.GetErrmsg(Handle);
-			throw SQLiteException.New(r, msg);
-		}
-	}
+	#endregion
 
-	/// <summary>
-	/// Sets a busy handler to sleep the specified amount of time when a table is locked.
-	/// The handler will sleep multiple times until a total time of <see cref="BusyTimeout"/> has accumulated.
-	/// </summary>
-	public TimeSpan BusyTimeout
-	{
-		get { return _busyTimeout; }
-		set
-		{
-			_busyTimeout = value;
-			if (Handle != NullHandle)
-			{
-				SQLite3Native.BusyTimeout(Handle, (int)_busyTimeout.TotalMilliseconds);
-			}
-		}
-	}
+	#region Transactions
 
-	/// <summary>
-	/// Returns the mappings from types to tables that the connection
-	/// currently understands.
-	/// </summary>
-	public IEnumerable<TableMapping> TableMappings
-	{
-		get
-		{
-			lock (_mappings)
-			{
-				return new List<TableMapping>(_mappings.Values);
-			}
-		}
-	}
-
-	/// <summary>
-	/// Retrieves the mapping that is automatically generated for the given type.
-	/// </summary>
-	/// <param name="type">
-	/// The type whose mapping to the database is returned.
-	/// </param>
-	/// <param name="createFlags">
-	/// Optional flags allowing implicit PK and indexes based on naming conventions
-	/// </param>
-	/// <returns>
-	/// The mapping represents the schema of the columns of the database and contains
-	/// methods to set and get properties of objects.
-	/// </returns>
-	public TableMapping GetMapping(
-		[DynamicallyAccessedMembers (DynamicallyAccessedMemberTypes.All)]
-		Type type,
-		CreateFlags createFlags = CreateFlags.None)
-	{
-		TableMapping map;
-		var key = type.FullName;
-		lock (_mappings)
-		{
-			if (_mappings.TryGetValue(key, out map))
-			{
-				if (createFlags != CreateFlags.None && createFlags != map.CreateFlags)
-				{
-					map = TableMappingBuilder.FromType(type, createFlags).Build();
-					_mappings[key] = map;
-				}
-			}
-			else
-			{
-				map = TableMappingBuilder.FromType(type, createFlags).Build();
-				_mappings.Add(key, map);
-			}
-		}
-		return map;
-	}
-
-	/// <summary>
-	/// Retrieves the mapping that is automatically generated for the given type.
-	/// </summary>
-	/// <param name="createFlags">
-	/// Optional flags allowing implicit PK and indexes based on naming conventions
-	/// </param>
-	/// <returns>
-	/// The mapping represents the schema of the columns of the database and contains
-	/// methods to set and get properties of objects.
-	/// </returns>
-	public TableMapping GetMapping<
-		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
-		T>(CreateFlags createFlags = CreateFlags.None)
-	{
-		return GetMapping(typeof(T), createFlags);
-	}
-
-	private struct IndexedColumn
-	{
-		public int Order;
-		public string ColumnName;
-	}
-
-	private struct IndexInfo
-	{
-		public string IndexName;
-		public string TableName;
-		public bool Unique;
-		public List<IndexedColumn> Columns;
-	}
-
-	/// <summary>
-	/// Executes a "drop table" on the database.  This is non-recoverable.
-	/// </summary>
-	public int DropTable<
-		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
-		T>()
-	{
-		return DropTable(GetMapping(typeof(T)));
-	}
-
-	/// <summary>
-	/// Executes a "drop table" on the database.  This is non-recoverable.
-	/// </summary>
-	/// <param name="map">
-	/// The TableMapping used to identify the table.
-	/// </param>
-	public int DropTable(TableMapping map)
-	{
-		var query = $"drop table if exists \"{map.TableName}\"";
-		return Execute(query);
-	}
-
-	/// <summary>
-	/// Executes a "create table if not exists" on the database. It also
-	/// creates any specified indexes on the columns of the table. It uses
-	/// a schema automatically generated from the specified type. You can
-	/// later access this schema by calling GetMapping.
-	/// </summary>
-	/// <returns>
-	/// Whether the table was created or migrated.
-	/// </returns>
-	public CreateTableResult CreateTable<
-		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
-		T>(CreateFlags createFlags = CreateFlags.None)
-	{
-		return CreateTable(typeof(T), createFlags);
-	}
-
-	/// <summary>
-	/// Executes a "create table if not exists" on the database. It also
-	/// creates any specified indexes on the columns of the table. It uses
-	/// a schema automatically generated from the specified type. You can
-	/// later access this schema by calling GetMapping.
-	/// </summary>
-	/// <param name="ty">Type to reflect to a database table.</param>
-	/// <param name="createFlags">Optional flags allowing implicit PK and indexes based on naming conventions.</param>
-	/// <returns>
-	/// Whether the table was created or migrated.
-	/// </returns>
-	public CreateTableResult CreateTable(
-		[DynamicallyAccessedMembers (DynamicallyAccessedMemberTypes.All)]
-		Type ty, CreateFlags createFlags = CreateFlags.None)
-	{
-		var map = GetMapping(ty, createFlags);
-
-		if (map.Columns.Length == 0)
-			throw new Exception($"Cannot create a table without columns (does '{ty.FullName}' have public properties?)");
-
-		return CreateTable(map);
-	}
-
-	/// <summary>
-	/// Executes a "create table if not exists" on the database. It also
-	/// creates any specified indexes on the columns of the table. It uses
-	/// a schema automatically generated from the specified type. You can
-	/// later access this schema by calling GetMapping.
-	/// </summary>
-	/// <param name="ty">Type to reflect to a database table.</param>
-	/// <param name="createFlags">Optional flags allowing implicit PK and indexes based on naming conventions.</param>
-	/// <returns>
-	/// Whether the table was created or migrated.
-	/// </returns>
-	public CreateTableResult CreateTable(
-		[DynamicallyAccessedMembers (DynamicallyAccessedMemberTypes.All)]
-		TableMapping map)
-	{
-		// Present a nice error if no columns specified
-		if (map.Columns.Length == 0)
-			throw new Exception("Cannot create a table without columns");
-
-		// Check if the table exists
-		var result = CreateTableResult.Created;
-		var existingCols = GetTableInfo(map.TableName);
-
-		// Create or migrate it
-		if (existingCols.Count == 0)
-		{
-			// Facilitate virtual tables a.k.a. full-text search.
-			// TODO: fix
-			//bool fts3 = (createFlags & CreateFlags.FullTextSearch3) != 0;
-			//bool fts4 = (createFlags & CreateFlags.FullTextSearch4) != 0;
-			bool fts3 = false;
-			bool fts4 = false;
-
-			bool fts = fts3 || fts4;
-			var @virtual = fts ? "virtual " : string.Empty;
-			var @using = fts3 ? "using fts3 " : fts4 ? "using fts4 " : string.Empty;
-
-			// Build query.
-			var query = "create " + @virtual + "table if not exists \"" + map.TableName + "\" " + @using + "(\n";
-
-			var isCompositePk = map.PrimaryKeyColumns.Length > 1;
-			var decls = new List<string>();
-
-			foreach (var column in map.Columns)
-				decls.Add(column.GetCreationSql(isCompositePk));
-
-			if (isCompositePk)
-				decls.Add($"PRIMARY KEY ({string.Join(", ", map.PrimaryKeyColumns.Select(x => x.Name))})");
-
-			var decl = string.Join(",\n", decls);
-			query += decl;
-			query += ")";
-			if (map.WithoutRowId)
-			{
-				query += " without rowid";
-			}
-			if (map.Strict)
-			{
-				query += " strict";
-			}
-
-			Execute(query);
-		}
-		else
-		{
-			result = CreateTableResult.Migrated;
-			MigrateTable(map, existingCols);
-		}
-
-		var indexes = new Dictionary<string, IndexInfo>();
-		foreach (var c in map.Columns)
-		{
-			foreach (var i in c.Indices)
-			{
-				var iname = i.Name ?? map.TableName + "_" + c.Name;
-				IndexInfo iinfo;
-				if (!indexes.TryGetValue(iname, out iinfo))
-				{
-					iinfo = new IndexInfo
-					{
-						IndexName = iname,
-						TableName = map.TableName,
-						Unique = i.Unique,
-						Columns = new List<IndexedColumn>()
-					};
-					indexes.Add(iname, iinfo);
-				}
-
-				if (i.Unique != iinfo.Unique)
-					throw new Exception("All the columns in an index must have the same value for their Unique property");
-
-				iinfo.Columns.Add(new IndexedColumn
-				{
-					Order = i.Order,
-					ColumnName = c.Name
-				});
-			}
-		}
-
-		foreach (var indexName in indexes.Keys)
-		{
-			var index = indexes[indexName];
-			var columns = index.Columns.OrderBy(i => i.Order).Select(i => i.ColumnName).ToArray();
-			CreateIndex(indexName, index.TableName, columns, index.Unique);
-		}
-
-		return result;
-	}
-
-	/// <summary>
-	/// Executes a "create table if not exists" on the database for each type. It also
-	/// creates any specified indexes on the columns of the table. It uses
-	/// a schema automatically generated from the specified type. You can
-	/// later access this schema by calling GetMapping.
-	/// </summary>
-	/// <returns>
-	/// Whether the table was created or migrated for each type.
-	/// </returns>
-	[UnconditionalSuppressMessage("Trimming", "IL2026", Justification = "This method preserves metadata for all type arguments.")]
-	public CreateTablesResult CreateTables<
-		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
-		T,
-		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
-		T2>(CreateFlags createFlags = CreateFlags.None)
-		where T : new()
-		where T2 : new()
-	{
-		return CreateTables(createFlags, typeof(T), typeof(T2));
-	}
-
-	/// <summary>
-	/// Executes a "create table if not exists" on the database for each type. It also
-	/// creates any specified indexes on the columns of the table. It uses
-	/// a schema automatically generated from the specified type. You can
-	/// later access this schema by calling GetMapping.
-	/// </summary>
-	/// <returns>
-	/// Whether the table was created or migrated for each type.
-	/// </returns>
-	[UnconditionalSuppressMessage("Trimming", "IL2026", Justification = "This method preserves metadata for all type arguments.")]
-	public CreateTablesResult CreateTables<
-		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
-		T,
-		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
-		T2,
-		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
-		T3>(CreateFlags createFlags = CreateFlags.None)
-		where T : new()
-		where T2 : new()
-		where T3 : new()
-	{
-		return CreateTables(createFlags, typeof(T), typeof(T2), typeof(T3));
-	}
-
-	/// <summary>
-	/// Executes a "create table if not exists" on the database for each type. It also
-	/// creates any specified indexes on the columns of the table. It uses
-	/// a schema automatically generated from the specified type. You can
-	/// later access this schema by calling GetMapping.
-	/// </summary>
-	/// <returns>
-	/// Whether the table was created or migrated for each type.
-	/// </returns>
-	[UnconditionalSuppressMessage("Trimming", "IL2026", Justification = "This method preserves metadata for all type arguments.")]
-	public CreateTablesResult CreateTables<
-		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
-		T,
-		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
-		T2,
-		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
-		T3,
-		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
-		T4>(CreateFlags createFlags = CreateFlags.None)
-		where T : new()
-		where T2 : new()
-		where T3 : new()
-		where T4 : new()
-	{
-		return CreateTables(createFlags, typeof(T), typeof(T2), typeof(T3), typeof(T4));
-	}
-
-	/// <summary>
-	/// Executes a "create table if not exists" on the database for each type. It also
-	/// creates any specified indexes on the columns of the table. It uses
-	/// a schema automatically generated from the specified type. You can
-	/// later access this schema by calling GetMapping.
-	/// </summary>
-	/// <returns>
-	/// Whether the table was created or migrated for each type.
-	/// </returns>
-	[UnconditionalSuppressMessage("Trimming", "IL2026", Justification = "This method preserves metadata for all type arguments.")]
-	public CreateTablesResult CreateTables<
-		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
-		T,
-		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
-		T2,
-		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
-		T3,
-		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
-		T4,
-		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
-		T5>(CreateFlags createFlags = CreateFlags.None)
-		where T : new()
-		where T2 : new()
-		where T3 : new()
-		where T4 : new()
-		where T5 : new()
-	{
-		return CreateTables(createFlags, typeof(T), typeof(T2), typeof(T3), typeof(T4), typeof(T5));
-	}
-
-	/// <summary>
-	/// Executes a "create table if not exists" on the database for each type. It also
-	/// creates any specified indexes on the columns of the table. It uses
-	/// a schema automatically generated from the specified type. You can
-	/// later access this schema by calling GetMapping.
-	/// </summary>
-	/// <returns>
-	/// Whether the table was created or migrated for each type.
-	/// </returns>
-	[RequiresUnreferencedCode("This method requires 'DynamicallyAccessedMemberTypes.All' on each input 'Type' instance.")]
-	public CreateTablesResult CreateTables(CreateFlags createFlags = CreateFlags.None, params Type[] types)
-	{
-		var result = new CreateTablesResult();
-		foreach (Type type in types)
-		{
-			var aResult = CreateTable(type, createFlags);
-			result.Results[type] = aResult;
-		}
-		return result;
-	}
-
-	/// <summary>
-	/// Creates an index for the specified table and columns.
-	/// </summary>
-	/// <param name="indexName">Name of the index to create</param>
-	/// <param name="tableName">Name of the database table</param>
-	/// <param name="columnNames">An array of column names to index</param>
-	/// <param name="unique">Whether the index should be unique</param>
-	/// <returns>Zero on success.</returns>
-	public int CreateIndex(string indexName, string tableName, string[] columnNames, bool unique = false)
-	{
-		const string sqlFormat = "create {2} index if not exists \"{3}\" on \"{0}\"(\"{1}\")";
-		var sql = string.Format(sqlFormat, tableName, string.Join("\", \"", columnNames), unique ? "unique" : "", indexName);
-		return Execute(sql);
-	}
-
-	/// <summary>
-	/// Creates an index for the specified table and column.
-	/// </summary>
-	/// <param name="indexName">Name of the index to create</param>
-	/// <param name="tableName">Name of the database table</param>
-	/// <param name="columnName">Name of the column to index</param>
-	/// <param name="unique">Whether the index should be unique</param>
-	/// <returns>Zero on success.</returns>
-	public int CreateIndex(string indexName, string tableName, string columnName, bool unique = false)
-	{
-		return CreateIndex(indexName, tableName, new string[] { columnName }, unique);
-	}
-
-	/// <summary>
-	/// Creates an index for the specified table and column.
-	/// </summary>
-	/// <param name="tableName">Name of the database table</param>
-	/// <param name="columnName">Name of the column to index</param>
-	/// <param name="unique">Whether the index should be unique</param>
-	/// <returns>Zero on success.</returns>
-	public int CreateIndex(string tableName, string columnName, bool unique = false)
-	{
-		return CreateIndex(tableName + "_" + columnName, tableName, columnName, unique);
-	}
-
-	/// <summary>
-	/// Creates an index for the specified table and columns.
-	/// </summary>
-	/// <param name="tableName">Name of the database table</param>
-	/// <param name="columnNames">An array of column names to index</param>
-	/// <param name="unique">Whether the index should be unique</param>
-	/// <returns>Zero on success.</returns>
-	public int CreateIndex(string tableName, string[] columnNames, bool unique = false)
-	{
-		return CreateIndex(tableName + "_" + string.Join("_", columnNames), tableName, columnNames, unique);
-	}
-
-	/// <summary>
-	/// Creates an index for the specified object property.
-	/// e.g. CreateIndex&lt;Client&gt;(c => c.Name);
-	/// </summary>
-	/// <typeparam name="T">Type to reflect to a database table.</typeparam>
-	/// <param name="property">Property to index</param>
-	/// <param name="unique">Whether the index should be unique</param>
-	/// <returns>Zero on success.</returns>
-	public int CreateIndex<
-		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
-		T>(Expression<Func<T, object>> property, bool unique = false)
-	{
-		MemberExpression mx;
-		if (property.Body.NodeType == ExpressionType.Convert)
-		{
-			mx = ((UnaryExpression)property.Body).Operand as MemberExpression;
-		}
-		else
-		{
-			mx = (property.Body as MemberExpression);
-		}
-		var propertyInfo = mx.Member as PropertyInfo;
-		if (propertyInfo == null)
-		{
-			throw new ArgumentException("The lambda expression 'property' should point to a valid Property");
-		}
-
-		var propName = propertyInfo.Name;
-
-		var map = GetMapping<T>();
-		var colName = map.FindColumnWithPropertyName(propName).Name;
-
-		return CreateIndex(map.TableName, colName, unique);
-	}
-
-	/// <summary>
-	/// Query the built-in sqlite table_info table for a specific tables columns.
-	/// </summary>
-	/// <returns>The columns contained in the table.</returns>
-	/// <param name="tableName">Table name.</param>
-	public List<ColumnDefinition> GetTableInfo(string tableName)
-	{
-		var query = "select name, \"notnull\" from pragma_table_info(\'" + tableName + "\')";
-		return Query<(string name, int notnull)>(query)
-			.Select(x =>
-				new ColumnDefinition(x.name, typeof(object))
-				{
-					IsNullable = x.notnull == 0
-				})
-			.ToList();
-	}
-
-	void MigrateTable(TableMapping map, List<ColumnDefinition> existingCols)
-	{
-		var toBeAdded = map.Columns
-			.Where(newCol => 
-				existingCols.All(existing => !string.Equals(existing.Name, newCol.Name, StringComparison.OrdinalIgnoreCase)))
-			.ToArray();
-
-		if (toBeAdded.Any(x => x.IsPK))
-		{
-			throw new InvalidOperationException("A column set as a primary key cannot be added to an existing table.");
-		}
-
-		foreach (var p in toBeAdded)
-		{
-			var addCol = $"alter table \"{map.TableName}\" add column {p.GetCreationSql(map.PrimaryKeyColumns.Length > 1)}";
-			Execute(addCol);
-		}
-	}
-
-	/// <summary>
-	/// Creates a new SQLiteCommand. Can be overridden to provide a sub-class.
-	/// </summary>
-	/// <seealso cref="SQLiteCommand.OnInstanceCreated"/>
-	protected virtual SQLiteCommand NewCommand()
-	{
-		return new SQLiteCommand(this);
-	}
-
-	/// <summary>
-	/// Creates a new SQLiteCommand given the command text with arguments. Place a '?'
-	/// in the command text for each of the arguments.
-	/// </summary>
-	/// <param name="cmdText">
-	/// The fully escaped SQL.
-	/// </param>
-	/// <param name="ps">
-	/// Arguments to substitute for the occurences of '?' in the command text.
-	/// </param>
-	/// <returns>
-	/// A <see cref="SQLiteCommand"/>
-	/// </returns>
-	public SQLiteCommand CreateCommand(string cmdText, params object[] ps)
-	{
-		if (!_open)
-			throw SQLiteException.New(SQLite3Native.Result.Error, "Cannot create commands from unopened database");
-
-		var cmd = NewCommand();
-		cmd.CommandText = cmdText;
-		foreach (var o in ps)
-		{
-			cmd.Bind(o);
-		}
-		return cmd;
-	}
-
-	/// <summary>
-	/// Creates a new SQLiteCommand given the command text with named arguments. Place a "[@:$]VVV"
-	/// in the command text for each of the arguments. VVV represents an alphanumeric identifier.
-	/// For example, @name :name and $name can all be used in the query.
-	/// </summary>
-	/// <param name="cmdText">
-	/// The fully escaped SQL.
-	/// </param>
-	/// <param name="args">
-	/// Arguments to substitute for the occurences of "[@:$]VVV" in the command text.
-	/// </param>
-	/// <returns>
-	/// A <see cref="SQLiteCommand" />
-	/// </returns>
-	public SQLiteCommand CreateCommand(string cmdText, Dictionary<string, object> args)
-	{
-		if (!_open)
-			throw SQLiteException.New(SQLite3Native.Result.Error, "Cannot create commands from unopened database");
-
-		SQLiteCommand cmd = NewCommand();
-		cmd.CommandText = cmdText;
-		foreach (var kv in args)
-		{
-			cmd.Bind(kv.Key, kv.Value);
-		}
-		return cmd;
-	}
-
-	/// <summary>
-	/// Creates a SQLiteCommand given the command text (SQL) with arguments. Place a '?'
-	/// in the command text for each of the arguments and then executes that command.
-	/// Use this method instead of Query when you don't expect rows back. Such cases include
-	/// INSERTs, UPDATEs, and DELETEs.
-	/// You can set the Trace or TimeExecution properties of the connection
-	/// to profile execution.
-	/// </summary>
-	/// <param name="query">
-	/// The fully escaped SQL.
-	/// </param>
-	/// <param name="args">
-	/// Arguments to substitute for the occurences of '?' in the query.
-	/// </param>
-	/// <returns>
-	/// The number of rows modified in the database as a result of this execution.
-	/// </returns>
-	public int Execute(string query, params object[] args)
-	{
-		var cmd = CreateCommand(query, args);
-
-		if (TimeExecution)
-		{
-			if (_sw == null)
-			{
-				_sw = new Stopwatch();
-			}
-			_sw.Reset();
-			_sw.Start();
-		}
-
-		var r = cmd.ExecuteNonQuery();
-
-		if (TimeExecution)
-		{
-			_sw.Stop();
-			_elapsedMilliseconds += _sw.ElapsedMilliseconds;
-			Tracer?.Invoke($"Finished in {_sw.ElapsedMilliseconds} ms ({_elapsedMilliseconds / 1000.0:0.0} s total)");
-		}
-
-		return r;
-	}
-
-	/// <summary>
-	/// Creates a SQLiteCommand given the command text (SQL) with arguments. Place a '?'
-	/// in the command text for each of the arguments and then executes that command.
-	/// Use this method when return primitive values.
-	/// You can set the Trace or TimeExecution properties of the connection
-	/// to profile execution.
-	/// </summary>
-	/// <param name="query">
-	/// The fully escaped SQL.
-	/// </param>
-	/// <param name="args">
-	/// Arguments to substitute for the occurences of '?' in the query.
-	/// </param>
-	/// <returns>
-	/// The number of rows modified in the database as a result of this execution.
-	/// </returns>
-	public T ExecuteScalar<T>(string query, params object[] args)
-	{
-		var cmd = CreateCommand(query, args);
-
-		if (TimeExecution)
-		{
-			if (_sw == null)
-			{
-				_sw = new Stopwatch();
-			}
-			_sw.Reset();
-			_sw.Start();
-		}
-
-		var r = cmd.ExecuteScalar<T>();
-
-		if (TimeExecution)
-		{
-			_sw.Stop();
-			_elapsedMilliseconds += _sw.ElapsedMilliseconds;
-			Tracer?.Invoke($"Finished in {_sw.ElapsedMilliseconds} ms ({_elapsedMilliseconds / 1000.0:0.0} s total)");
-		}
-
-		return r;
-	}
-
-	/// <summary>
-	/// Creates a SQLiteCommand given the command text (SQL) with arguments. Place a '?'
-	/// in the command text for each of the arguments and then executes that command.
-	/// It returns each row of the result using the mapping automatically generated for
-	/// the given type.
-	/// </summary>
-	/// <param name="query">
-	/// The fully escaped SQL.
-	/// </param>
-	/// <param name="args">
-	/// Arguments to substitute for the occurences of '?' in the query.
-	/// </param>
-	/// <returns>
-	/// An enumerable with one result for each row returned by the query.
-	/// </returns>
-	public List<T> Query<
-		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
-		T>(string query, params object[] args) where T : new()
-	{
-		var cmd = CreateCommand(query, args);
-		return cmd.ExecuteQuery<T>();
-	}
-
-	/// <summary>
-	/// Creates a SQLiteCommand given the command text (SQL) with arguments. Place a '?'
-	/// in the command text for each of the arguments and then executes that command.
-	/// It returns the first column of each row of the result.
-	/// </summary>
-	/// <param name="query">
-	/// The fully escaped SQL.
-	/// </param>
-	/// <param name="args">
-	/// Arguments to substitute for the occurences of '?' in the query.
-	/// </param>
-	/// <returns>
-	/// An enumerable with one result for the first column of each row returned by the query.
-	/// </returns>
-	public List<T> QueryScalars<T>(string query, params object[] args)
-	{
-		var cmd = CreateCommand(query, args);
-		return cmd.ExecuteQueryScalars<T>().ToList();
-	}
-
-	/// <summary>
-	/// Creates a SQLiteCommand given the command text (SQL) with arguments. Place a '?'
-	/// in the command text for each of the arguments and then executes that command.
-	/// It returns each row of the result using the mapping automatically generated for
-	/// the given type.
-	/// </summary>
-	/// <param name="query">
-	/// The fully escaped SQL.
-	/// </param>
-	/// <param name="args">
-	/// Arguments to substitute for the occurences of '?' in the query.
-	/// </param>
-	/// <returns>
-	/// An enumerable with one result for each row returned by the query.
-	/// The enumerator (retrieved by calling GetEnumerator() on the result of this method)
-	/// will call sqlite3_step on each call to MoveNext, so the database
-	/// connection must remain open for the lifetime of the enumerator.
-	/// </returns>
-	public IEnumerable<T> DeferredQuery<
-		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
-		T>(string query, params object[] args) where T : new()
-	{
-		var cmd = CreateCommand(query, args);
-		return cmd.ExecuteDeferredQuery<T>();
-	}
-
-	/// <summary>
-	/// Creates a SQLiteCommand given the command text (SQL) with arguments. Place a '?'
-	/// in the command text for each of the arguments and then executes that command.
-	/// It returns each row of the result using the specified mapping. This function is
-	/// only used by libraries in order to query the database via introspection. It is
-	/// normally not used.
-	/// </summary>
-	/// <param name="map">
-	/// A <see cref="TableMapping"/> to use to convert the resulting rows
-	/// into objects.
-	/// </param>
-	/// <param name="query">
-	/// The fully escaped SQL.
-	/// </param>
-	/// <param name="args">
-	/// Arguments to substitute for the occurences of '?' in the query.
-	/// </param>
-	/// <returns>
-	/// An enumerable with one result for each row returned by the query.
-	/// </returns>
-	public List<T> Query<T>(TableMapping map, string query, params object[] args)
-	{
-		var cmd = CreateCommand(query, args);
-		return cmd.ExecuteQuery<T>(map);
-	}
-
-	/// <summary>
-	/// Creates a SQLiteCommand given the command text (SQL) with arguments. Place a '?'
-	/// in the command text for each of the arguments and then executes that command.
-	/// It returns each row of the result using the specified mapping. This function is
-	/// only used by libraries in order to query the database via introspection. It is
-	/// normally not used.
-	/// </summary>
-	/// <param name="map">
-	/// A <see cref="TableMapping"/> to use to convert the resulting rows
-	/// into objects.
-	/// </param>
-	/// <param name="query">
-	/// The fully escaped SQL.
-	/// </param>
-	/// <param name="args">
-	/// Arguments to substitute for the occurences of '?' in the query.
-	/// </param>
-	/// <returns>
-	/// An enumerable with one result for each row returned by the query.
-	/// The enumerator (retrieved by calling GetEnumerator() on the result of this method)
-	/// will call sqlite3_step on each call to MoveNext, so the database
-	/// connection must remain open for the lifetime of the enumerator.
-	/// </returns>
-	public IEnumerable<object> DeferredQuery(TableMapping map, string query, params object[] args)
-	{
-		var cmd = CreateCommand(query, args);
-		return cmd.ExecuteDeferredQuery<object>(map);
-	}
-
-	/// <summary>
-	/// Returns a queryable interface to the table represented by the given type.
-	/// </summary>
-	/// <returns>
-	/// A queryable object that is able to translate Where, OrderBy, and Take
-	/// queries into native SQL.
-	/// </returns>
-	public TableQuery<T> Table<
-		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
-		T>() where T : new()
-	{
-		return new TableQuery<T>(this);
-	}
-
-	/// <summary>
-	/// Returns a queryable interface to the table represented by the given type.
-	/// </summary>
-	/// <returns>
-	/// A queryable object that is able to translate Where, OrderBy, and Take
-	/// queries into native SQL.
-	/// </returns>
-	public TableQuery<T> Table<
-		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
-		T>(TableMapping map) where T : new()
-	{
-		return new TableQuery<T>(this, map);
-	}
-
-	/// <summary>
-	/// Attempts to retrieve an object with the given primary key from the table
-	/// associated with the specified type. Use of this method requires that
-	/// the given type have a designated PrimaryKey (using the PrimaryKeyAttribute).
-	/// </summary>
-	/// <param name="pk">
-	/// The primary key.
-	/// </param>
-	/// <returns>
-	/// The object with the given primary key. Throws a not found exception
-	/// if the object is not found.
-	/// </returns>
-	public T Get<
-		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
-		T>(object pk) where T : new()
-	{
-		var map = GetMapping(typeof(T));
-
-		if (map.PKWhereSql == null)
-			throw new ArgumentException("Cannot use Get() on a table that does not have a primary key");
-
-		if (map.PrimaryKeyColumns.Length > 1)
-			throw new NotImplementedException(); // TODO: implement
-
-		return Query<T>($"select * from \"{map.TableName}\" {map.PKWhereSql}", pk).First();
-	}
-
-	/// <summary>
-	/// Attempts to retrieve an object with the given primary key from the table
-	/// associated with the specified type. Use of this method requires that
-	/// the given type have a designated PrimaryKey (using the PrimaryKeyAttribute).
-	/// </summary>
-	/// <param name="pk">
-	/// The primary key.
-	/// </param>
-	/// <param name="map">
-	/// The TableMapping used to identify the table.
-	/// </param>
-	/// <returns>
-	/// The object with the given primary key. Throws a not found exception
-	/// if the object is not found.
-	/// </returns>
-	public T Get<T>(object pk, TableMapping map)
-	{
-		if (map.PKWhereSql == null)
-			throw new ArgumentException("Cannot use Get() on a table that does not have a primary key");
-
-		if (map.PrimaryKeyColumns.Length > 1)
-			throw new NotImplementedException(); // TODO: implement
-
-		return Query<T>(map, $"select * from \"{map.TableName}\" {map.PKWhereSql}", pk).First();
-	}
-
-	/// <summary>
-	/// Attempts to retrieve the first object that matches the predicate from the table
-	/// associated with the specified type.
-	/// </summary>
-	/// <param name="predicate">
-	/// A predicate for which object to find.
-	/// </param>
-	/// <returns>
-	/// The object that matches the given predicate. Throws a not found exception
-	/// if the object is not found.
-	/// </returns>
-	public T Get<
-		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
-		T>(Expression<Func<T, bool>> predicate) where T : new()
-	{
-		return Table<T>().Where(predicate).First();
-	}
-
-	/// <summary>
-	/// Attempts to retrieve an object with the given primary key from the table
-	/// associated with the specified type. Use of this method requires that
-	/// the given type have a designated PrimaryKey (using the PrimaryKeyAttribute).
-	/// </summary>
-	/// <param name="pk">
-	/// The primary key.
-	/// </param>
-	/// <returns>
-	/// The object with the given primary key or null
-	/// if the object is not found.
-	/// </returns>
-	public T Find<
-		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
-		T>(object pk) where T : new()
-	{
-		var map = GetMapping(typeof(T));
-
-		if (map.PKWhereSql == null)
-			throw new ArgumentException("Cannot use Find() on a table that does not have a primary key");
-
-		if (map.PrimaryKeyColumns.Length > 0)
-			throw new NotImplementedException(); // TODO: implement
-
-		return Query<T>($"select * from \"{map.TableName}\" {map.PKWhereSql}", pk).FirstOrDefault();
-	}
-
-	/// <summary>
-	/// Attempts to retrieve an object with the given primary key from the table
-	/// associated with the specified type. Use of this method requires that
-	/// the given type have a designated PrimaryKey (using the PrimaryKeyAttribute).
-	/// </summary>
-	/// <param name="pk">
-	/// The primary key.
-	/// </param>
-	/// <param name="map">
-	/// The TableMapping used to identify the table.
-	/// </param>
-	/// <returns>
-	/// The object with the given primary key or null
-	/// if the object is not found.
-	/// </returns>
-	public T Find<T>(object pk, TableMapping map)
-	{
-		if (map.PKWhereSql == null)
-			throw new ArgumentException("Cannot use Find() on a table that does not have a primary key");
-
-		if (map.PrimaryKeyColumns.Length > 0)
-			throw new NotImplementedException(); // TODO: implement
-
-		return Query<T>(map, $"select * from \"{map.TableName}\" {map.PKWhereSql}", pk).FirstOrDefault();
-	}
-
-	/// <summary>
-	/// Attempts to retrieve the first object that matches the predicate from the table
-	/// associated with the specified type.
-	/// </summary>
-	/// <param name="predicate">
-	/// A predicate for which object to find.
-	/// </param>
-	/// <returns>
-	/// The object that matches the given predicate or null
-	/// if the object is not found.
-	/// </returns>
-	public T Find<
-		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
-		T>(Expression<Func<T, bool>> predicate) where T : new()
-	{
-		return Table<T>().Where(predicate).FirstOrDefault();
-	}
-
-	/// <summary>
-	/// Attempts to retrieve the first object that matches the query from the table
-	/// associated with the specified type.
-	/// </summary>
-	/// <param name="query">
-	/// The fully escaped SQL.
-	/// </param>
-	/// <param name="args">
-	/// Arguments to substitute for the occurences of '?' in the query.
-	/// </param>
-	/// <returns>
-	/// The object that matches the given predicate or null
-	/// if the object is not found.
-	/// </returns>
-	public T FindWithQuery<
-		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
-		T>(string query, params object[] args) where T : new()
-	{
-		return Query<T>(query, args).FirstOrDefault();
-	}
-
-	/// <summary>
-	/// Attempts to retrieve the first object that matches the query from the table
-	/// associated with the specified type.
-	/// </summary>
-	/// <param name="map">
-	/// The TableMapping used to identify the table.
-	/// </param>
-	/// <param name="query">
-	/// The fully escaped SQL.
-	/// </param>
-	/// <param name="args">
-	/// Arguments to substitute for the occurences of '?' in the query.
-	/// </param>
-	/// <returns>
-	/// The object that matches the given predicate or null
-	/// if the object is not found.
-	/// </returns>
-	public object FindWithQuery<T>(TableMapping map, string query, params object[] args)
-	{
-		return Query<T>(map, query, args).FirstOrDefault();
-	}
+	private int _transactionDepth = 0;
 
 	/// <summary>
 	/// Whether <see cref="BeginTransaction"/> has been called and the database is waiting for a <see cref="Commit"/>.
 	/// </summary>
-	public bool IsInTransaction
-	{
-		get { return _transactionDepth > 0; }
-	}
+	public bool IsInTransaction => _transactionDepth > 0;
 
 	/// <summary>
 	/// Begins a new transaction. Call <see cref="Commit"/> to end the transaction.
@@ -1599,6 +355,8 @@ public partial class SQLiteConnection : IDisposable
 		}
 	}
 
+	private int transactionPointCounter = 0;
+
 	/// <summary>
 	/// Creates a savepoint in the database at the current point in the transaction timeline.
 	/// Begins a new transaction if one is not in progress.
@@ -1611,7 +369,7 @@ public partial class SQLiteConnection : IDisposable
 	public string SaveTransactionPoint()
 	{
 		int depth = Interlocked.Increment(ref _transactionDepth) - 1;
-		string retVal = "S" + _rand.Next(short.MaxValue) + "D" + depth;
+		string retVal = $"S{Interlocked.Increment(ref transactionPointCounter):0000}D{depth}";
 
 		try
 		{
@@ -1619,8 +377,7 @@ public partial class SQLiteConnection : IDisposable
 		}
 		catch (Exception ex)
 		{
-			var sqlExp = ex as SQLiteException;
-			if (sqlExp != null)
+			if (ex is SQLiteException sqlExp)
 			{
 				// It is recommended that applications respond to the errors listed below
 				//    by explicitly issuing a ROLLBACK command.
@@ -1669,7 +426,7 @@ public partial class SQLiteConnection : IDisposable
 	/// </summary>
 	/// <param name="savepoint">The name of the savepoint to roll back to, as returned by <see cref="SaveTransactionPoint"/>.  If savepoint is null or empty, this method is equivalent to a call to <see cref="Rollback"/></param>
 	/// <param name="noThrow">true to avoid throwing exceptions, false otherwise</param>
-	void RollbackTo(string savepoint, bool noThrow)
+	void RollbackTo(string? savepoint, bool noThrow)
 	{
 		// Rolling back without a TO clause rolls backs all transactions
 		//    and leaves the transaction stack empty.
@@ -1691,7 +448,6 @@ public partial class SQLiteConnection : IDisposable
 		{
 			if (!noThrow)
 				throw;
-
 		}
 		// No need to rollback if there are no transactions open.
 	}
@@ -1737,8 +493,7 @@ public partial class SQLiteConnection : IDisposable
 		int firstLen = savepoint.IndexOf('D');
 		if (firstLen >= 2 && savepoint.Length > firstLen + 1)
 		{
-			int depth;
-			if (Int32.TryParse(savepoint.Substring(firstLen + 1), out depth))
+			if (int.TryParse(savepoint.Substring(firstLen + 1), out var depth))
 			{
 				// TODO: Mild race here, but inescapable without locking almost everywhere.
 				if (0 <= depth && depth < _transactionDepth)
@@ -1784,143 +539,780 @@ public partial class SQLiteConnection : IDisposable
 	}
 
 	/// <summary>
-	/// Executes <paramref name="action"/> within a (possibly nested) transaction by wrapping it in a SAVEPOINT. If an
-	/// exception occurs the whole transaction is rolled back, not just the current savepoint. The exception
-	/// is rethrown.
+	/// Creates a disposable transaction scope that will call <see cref="Rollback"/> on dispose if <see cref="TransactionScope.Commit"/> has not been called.<br/>
+	/// Use this in a <see langword="using"/> block to ensure that the data you manipulate within the block is safely rolled back on any exception.
 	/// </summary>
-	/// <param name="action">
-	/// The <see cref="Action"/> to perform within a transaction. <paramref name="action"/> can contain any number
-	/// of operations on the connection but should never call <see cref="BeginTransaction"/> or
-	/// <see cref="Commit"/>.
-	/// </param>
-	public void RunInTransaction(Action action)
+	public TransactionScope CreateTransactionScope()
 	{
-		try
+		return new TransactionScope(this, SaveTransactionPoint());
+	}
+
+	/// <summary>
+	/// A disposable barrier for transactions.
+	/// </summary>
+	public class TransactionScope : IDisposable
+	{
+		private readonly SQLiteConnection _connection;
+		private readonly string _savepoint;
+		private bool _didCommit = false;
+
+		internal TransactionScope(SQLiteConnection connection, string savepoint)
 		{
-			var savePoint = SaveTransactionPoint();
-			action();
-			Release(savePoint);
+			_connection = connection;
+			_savepoint = savepoint;
 		}
-		catch (Exception)
+
+		/// <summary>
+		/// Causes the current active transaction to be committed.
+		/// </summary>
+		public void Commit()
 		{
-			Rollback();
-			throw;
+			_connection.Release(_savepoint);
+			_didCommit = true;
+		}
+
+		public void Dispose()
+		{
+			if (!_didCommit)
+				_connection.RollbackTo(null, true);
+		}
+	}
+
+	#endregion
+
+	#region Table
+
+	private readonly Dictionary<Type, (TableMapping mapping, bool wasCreated)> _generatedMappingCache = new();
+
+	/// <summary>
+	/// Retrieves the mapping that is automatically generated for the given type.
+	/// </summary>
+	/// <typeparam name="T">
+	/// The type whose mapping to the database is returned.
+	/// </typeparam>
+	/// <param name="createFlags">
+	/// Optional flags that alter how the mapping is generated.
+	/// </param>
+	/// <returns>
+	/// The mapping represents the schema of the columns of the database and contains
+	/// methods to set and get properties of objects.
+	/// </returns>
+	public TableMapping GetMapping<
+		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
+		T>(
+		TableCreateFlags createFlags = TableCreateFlags.None)
+	{
+		return GetMapping(typeof(T), createFlags);
+	}
+
+	/// <summary>
+	/// Retrieves the mapping that is automatically generated for the given type.
+	/// </summary>
+	/// <param name="type">
+	/// The type whose mapping to the database is returned.
+	/// </param>
+	/// <param name="createFlags">
+	/// Optional flags that alter how the mapping is generated.
+	/// </param>
+	/// <returns>
+	/// The mapping represents the schema of the columns of the database and contains
+	/// methods to set and get properties of objects.
+	/// </returns>
+	public TableMapping GetMapping(
+		[DynamicallyAccessedMembers (DynamicallyAccessedMemberTypes.All)]
+		Type type,
+		TableCreateFlags createFlags = TableCreateFlags.None)
+	{
+		lock (_generatedMappingCache)
+		{
+			var map = _generatedMappingCache.GetValueOrDefault(type);
+
+			if (map == default || (createFlags != map.mapping.CreateFlags && !map.wasCreated))
+			{
+				map = (TableMappingBuilder.FromType(type, createFlags).Build(), false);
+				_generatedMappingCache[type] = map;
+			}
+
+			return map.mapping;
 		}
 	}
 
 	/// <summary>
-	/// Inserts all specified objects.
+	/// Query the built-in sqlite table_info table for a specific tables columns.
 	/// </summary>
-	/// <param name="objects">
-	/// An <see cref="IEnumerable"/> of the objects to insert.
-	/// </param>
-	/// <param name="runInTransaction">
-	/// A boolean indicating if the inserts should be wrapped in a transaction.
-	/// </param>
-	/// <returns>
-	/// The number of rows added to the table.
-	/// </returns>
-	[RequiresUnreferencedCode("This method requires ''DynamicallyAccessedMemberTypes.All' on the runtime type of all objects in 'objects'.")]
-	public int InsertAll(System.Collections.IEnumerable objects, bool runInTransaction = true)
+	/// <returns>The columns contained in the table.</returns>
+	/// <param name="tableName">Table name.</param>
+	public List<ColumnDefinition> GetTableInfo(string tableName)
 	{
-		var c = 0;
-		if (runInTransaction)
-		{
-			RunInTransaction(() => {
-				foreach (var r in objects)
+		var query = "select name, \"notnull\" from pragma_table_info(\'" + tableName + "\')";
+		return Query<(string name, int notnull)>(query)
+			.Select(x =>
+				new ColumnDefinition(x.name, typeof(object))
 				{
-					c += Insert(r);
-				}
-			});
+					IsNullable = x.notnull == 0
+				})
+			.ToList();
+	}
+
+	/// <summary>
+	/// Returns a queryable interface to the table represented by the given type.
+	/// </summary>
+	/// <returns>
+	/// A queryable object that is able to translate Where, OrderBy, and Take
+	/// queries into native SQL.
+	/// </returns>
+	public TableQuery<T> Table<
+		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
+		T>() where T : new()
+	{
+		return new TableQuery<T>(this, GetMapping(typeof(T)));
+	}
+
+	/// <summary>
+	/// Returns a queryable interface to the table represented by the given type.
+	/// </summary>
+	/// <returns>
+	/// A queryable object that is able to translate Where, OrderBy, and Take
+	/// queries into native SQL.
+	/// </returns>
+	public TableQuery<T> Table<
+		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
+		T>(TableMapping map) where T : new()
+	{
+		return new TableQuery<T>(this, map);
+	}
+
+	public enum CreateTableResult
+	{
+		Created,
+		Migrated,
+	}
+
+	/// <summary>
+	/// Executes a "create table if not exists" on the database using the specified type, including any constraints or indexes.
+	/// Mapping is automatically generated via <see cref="GetMapping"/>.
+	/// </summary>
+	/// <returns>
+	/// Whether the table was created or migrated.
+	/// </returns>
+	public CreateTableResult CreateTable<
+		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
+	T>(TableCreateFlags createFlags = TableCreateFlags.None)
+	{
+		return CreateTable(typeof(T), createFlags);
+	}
+
+	/// <summary>
+	/// Executes a "create table if not exists" on the database using the specified type, including any constraints or indexes.
+	/// Mapping is automatically generated via <see cref="GetMapping"/>.
+	/// </summary>
+	/// <param name="type">Type to reflect to a database table.</param>
+	/// <param name="createFlags">Optional flags allowing implicit PK and indexes based on naming conventions.</param>
+	/// <returns>
+	/// Whether the table was created or migrated.
+	/// </returns>
+	public CreateTableResult CreateTable(
+		[DynamicallyAccessedMembers (DynamicallyAccessedMemberTypes.All)]
+		Type type, TableCreateFlags createFlags = TableCreateFlags.None)
+	{
+		var map = GetMapping(type, createFlags);
+
+		if (map.Columns.Length == 0)
+			throw new Exception($"Cannot create a table without columns (does '{type.FullName}' have public properties?)");
+
+		return CreateTable(map);
+	}
+
+	/// <summary>
+	/// Executes a "create table if not exists" on the database using the specified mapping, including any constraints or indexes.
+	/// </summary>
+	/// <param name="map">Type to reflect to a database table.</param>
+	/// <returns>
+	/// Whether the table was created or migrated.
+	/// </returns>
+	public CreateTableResult CreateTable(TableMapping map)
+	{
+		if (map.Columns.Length == 0)
+			throw new Exception("Cannot create a table without columns");
+
+		// Check if the table exists
+		var result = CreateTableResult.Created;
+		var existingCols = GetTableInfo(map.TableName);
+
+		// Create or migrate it
+		if (existingCols.Count == 0)
+		{
+			// Facilitate virtual tables a.k.a. full-text search.
+			bool fts3 = (map.CreateFlags & TableCreateFlags.FullTextSearch3) != 0;
+			bool fts4 = (map.CreateFlags & TableCreateFlags.FullTextSearch4) != 0;
+
+			bool fts = fts3 || fts4;
+			var @virtual = fts ? "VIRTUAL " : string.Empty;
+			var @using = fts3 ? "USING FTS3 " : fts4 ? "USING FTS4 " : string.Empty;
+
+			// Build query.
+			var stringBuilder = new StringBuilder();
+
+			stringBuilder.Append($"CREATE {@virtual}TABLE IF NOT EXISTS \"{map.TableName}\" {@using}(\n");
+
+			var definitions = new List<string>();
+
+			foreach (var column in map.Columns)
+				definitions.Add(column.GetCreationSql());
+
+			if (map.PrimaryKeyColumns.Length > 0)
+			{
+				var autoIncrement = map.PrimaryKeyColumns.Any(x => x.IsAutoInc) ? " AUTOINCREMENT" : "";
+				definitions.Add($"PRIMARY KEY ({string.Join(", ", map.PrimaryKeyColumns.Select(x => x.Name))}{autoIncrement})");
+			}
+
+			for (var i = 0; i < definitions.Count; i++)
+			{
+				stringBuilder.Append(definitions[i]);
+
+				if (i < definitions.Count - 1)
+					stringBuilder.Append(',');
+
+				stringBuilder.Append('\n');
+			}
+
+			stringBuilder.Append(")");
+
+			if (map.WithoutRowId)
+			{
+				stringBuilder.Append(" WITHOUT ROWID");
+			}
+			if (map.Strict)
+			{
+				stringBuilder.Append(" STRICT");
+			}
+
+			Execute(stringBuilder.ToString());
 		}
 		else
 		{
-			foreach (var r in objects)
+			result = CreateTableResult.Migrated;
+			MigrateTable(map, existingCols);
+		}
+
+
+		var indexes = new Dictionary<string, (string IndexName, bool Unique, List<(string ColumnName, int Order)> Columns)>();
+
+		foreach (var column in map.Columns)
+		{
+			foreach (var columnIndex in column.Indices)
 			{
-				c += Insert(r);
+				var indexName = columnIndex.Name ?? $"{map.TableName}_{column.Name}";
+
+				if (!indexes.TryGetValue(indexName, out var indexInfo))
+				{
+					indexInfo = (indexName, columnIndex.Unique, new());
+					indexes.Add(indexName, indexInfo);
+				}
+
+				if (columnIndex.Unique != indexInfo.Unique)
+					throw new Exception("All the columns in an index must have the same value for their Unique property");
+
+				indexInfo.Columns.Add((column.Name, columnIndex.Order));
 			}
 		}
-		return c;
+
+		foreach (var indexName in indexes.Keys)
+		{
+			var index = indexes[indexName];
+
+			var columns = index.Columns
+				.OrderBy(i => i.Order)
+				.Select(i => i.ColumnName)
+				.ToArray();
+
+			CreateIndex(map.TableName, columns, indexName, index.Unique);
+		}
+
+		if (map.MappedType != null)
+			_generatedMappingCache[map.MappedType] = (map, true);
+
+		return result;
+	}
+
+	private void MigrateTable(TableMapping map, List<ColumnDefinition> existingCols)
+	{
+		var toBeAdded = map.Columns
+			.Where(newCol =>
+				existingCols.All(existing => !string.Equals(existing.Name, newCol.Name, StringComparison.OrdinalIgnoreCase)))
+			.ToArray();
+
+		if (toBeAdded.Any(x => x.IsPK))
+		{
+			throw new InvalidOperationException("A column set as a primary key cannot be added to an existing table.");
+		}
+
+		foreach (var p in toBeAdded)
+		{
+			var addCol = $"alter table \"{map.TableName}\" add column {p.GetCreationSql()}";
+			Execute(addCol);
+		}
 	}
 
 	/// <summary>
-	/// Inserts all specified objects.
+	/// Executes a "create table if not exists" on the database using the specified type, including any constraints or indexes.
+	/// Mapping is automatically generated via <see cref="GetMapping"/>.
 	/// </summary>
-	/// <param name="objects">
-	/// An <see cref="IEnumerable"/> of the objects to insert.
-	/// </param>
-	/// <param name="extra">
-	/// Literal SQL code that gets placed into the command. INSERT {extra} INTO ...
-	/// </param>
-	/// <param name="runInTransaction">
-	/// A boolean indicating if the inserts should be wrapped in a transaction.
-	/// </param>
 	/// <returns>
-	/// The number of rows added to the table.
+	/// Whether the table was created or migrated for each type.
 	/// </returns>
-	[RequiresUnreferencedCode("This method requires ''DynamicallyAccessedMemberTypes.All' on the runtime type of all objects in 'objects'.")]
-	public int InsertAll(System.Collections.IEnumerable objects, string extra, bool runInTransaction = true)
+	[RequiresUnreferencedCode("This method requires 'DynamicallyAccessedMemberTypes.All' on each input 'Type' instance.")]
+	public Dictionary<Type, CreateTableResult> CreateTables(TableCreateFlags createFlags = TableCreateFlags.None, params Type[] types)
 	{
-		var c = 0;
-		if (runInTransaction)
+		var results = new Dictionary<Type, CreateTableResult>();
+		foreach (Type type in types)
 		{
-			RunInTransaction(() => {
-				foreach (var r in objects)
-				{
-					c += Insert(r, extra);
-				}
-			});
+			var aResult = CreateTable(type, createFlags);
+			results[type] = aResult;
+		}
+		return results;
+	}
+
+	/// <summary>
+	/// Executes a "create table if not exists" on the database using the specified type, including any constraints or indexes.
+	/// Mapping is automatically generated via <see cref="GetMapping"/>.
+	/// </summary>
+	/// <returns>
+	/// Whether the table was created or migrated for each type.
+	/// </returns>
+	public Dictionary<TableMapping, CreateTableResult> CreateTables(params TableMapping[] mappings)
+	{
+		var results = new Dictionary<TableMapping, CreateTableResult>();
+		foreach (var map in mappings)
+		{
+			var aResult = CreateTable(map);
+			results[map] = aResult;
+		}
+		return results;
+	}
+
+
+	/// <summary>
+	/// Executes a "drop table" on the table associated with the object. This is irreversible.
+	/// </summary>
+	public int DropTable<
+		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
+		T>()
+	{
+		return DropTable(GetMapping(typeof(T)));
+	}
+
+	/// <summary>
+	/// Executes a "drop table" on the table specified in the mapping. This is irreversible.
+	/// </summary>
+	public int DropTable(TableMapping map)
+	{
+		var query = $"drop table if exists \"{map.TableName}\"";
+		return Execute(query);
+	}
+
+	#endregion
+
+	#region Index
+
+	/// <summary>
+	/// Creates an index for the specified object property.
+	/// e.g. CreateIndex&lt;Client&gt;(c => c.Name);
+	/// </summary>
+	/// <typeparam name="T">Type to reflect to a database table.</typeparam>
+	/// <param name="property">Property to index.</param>
+	/// <param name="indexName">The name of the index.</param>
+	/// <param name="unique">Whether the index should be unique.</param>
+	/// <returns>Zero on success.</returns>
+	public int CreateIndex<
+		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
+		T>(Expression<Func<T, object>> property, string? indexName = null, bool unique = false)
+	{
+		MemberExpression mx;
+		// TODO: handle anonymous object creation
+		if (property.Body.NodeType == ExpressionType.Convert)
+		{
+			mx = ((UnaryExpression)property.Body).Operand as MemberExpression;
 		}
 		else
 		{
-			foreach (var r in objects)
-			{
-				c += Insert(r, extra);
-			}
+			mx = (property.Body as MemberExpression);
 		}
-		return c;
+		var propertyInfo = mx.Member as PropertyInfo;
+		if (propertyInfo == null)
+		{
+			throw new ArgumentException("The lambda expression 'property' should point to a valid Property");
+		}
+
+		var propName = propertyInfo.Name;
+
+		var map = GetMapping<T>();
+		var colName = map.FindColumnWithPropertyName(propName).Name;
+
+		return CreateIndex(map.TableName, colName, null, unique);
 	}
 
 	/// <summary>
-	/// Inserts all specified objects.
+	/// Creates an index for the specified table and column.
 	/// </summary>
-	/// <param name="objects">
-	/// An <see cref="IEnumerable"/> of the objects to insert.
+	/// <param name="tableName">Name of the database table</param>
+	/// <param name="columnName">Name of the column to index</param>
+	/// <param name="indexName">Name of the index to create</param>
+	/// <param name="unique">Whether the index should be unique</param>
+	/// <returns>Zero on success.</returns>
+	public int CreateIndex(string tableName, string columnName, string? indexName = null, bool unique = false)
+	{
+		return CreateIndex(tableName, [columnName], indexName, unique);
+	}
+
+	/// <summary>
+	/// Creates an index for the specified table and columns.
+	/// </summary>
+	/// <param name="tableName">Name of the database table</param>
+	/// <param name="columnNames">An array of column names to index</param>
+	/// <param name="indexName">Name of the index to create</param>
+	/// <param name="unique">Whether the index should be unique</param>
+	/// <returns>Zero on success.</returns>
+	public int CreateIndex(string tableName, string[] columnNames, string? indexName = null, bool unique = false)
+	{
+		indexName ??= $"{tableName}_{string.Join("_", columnNames)}";
+		var sql = $"create {(unique ? "unique" : "")} index if not exists \"{indexName}\" on \"{tableName}\" (\"{string.Join("\", \"", columnNames)}\")";
+		return Execute(sql);
+	}
+
+	#endregion
+
+	#region Execute
+
+	/// <summary>
+	/// Creates a new SQLiteCommand given the command text with arguments. Place a '?'
+	/// in the command text for each of the arguments.
+	/// </summary>
+	/// <param name="cmdText">
+	/// The fully escaped SQL.
 	/// </param>
-	/// <param name="objType">
-	/// The type of object to insert.
-	/// </param>
-	/// <param name="runInTransaction">
-	/// A boolean indicating if the inserts should be wrapped in a transaction.
+	/// <param name="parameters">
+	/// Arguments to substitute for the occurrences of '?' in the command text.
 	/// </param>
 	/// <returns>
-	/// The number of rows added to the table.
+	/// A <see cref="SQLiteCommand"/>
 	/// </returns>
-	public int InsertAll(
-		System.Collections.IEnumerable objects,
-		[DynamicallyAccessedMembers (DynamicallyAccessedMemberTypes.All)]
-		Type objType,
-		bool runInTransaction = true)
+	public SQLiteCommand CreateCommand(string cmdText, params object[] parameters)
 	{
-		var c = 0;
-		if (runInTransaction)
-		{
-			RunInTransaction(() => {
-				foreach (var r in objects)
-				{
-					c += Insert(r, objType);
-				}
-			});
-		}
-		else
-		{
-			foreach (var r in objects)
-			{
-				c += Insert(r, objType);
-			}
-		}
-		return c;
+		if (!_open)
+			throw new SQLiteException(SQLite3Native.Result.Error, "Cannot create commands from unopened database");
+
+		var cmd = new SQLiteCommand(this);
+		cmd.CommandText = cmdText;
+
+		foreach (var o in parameters)
+			cmd.Bind(o);
+
+		return cmd;
 	}
+
+	/// <summary>
+	/// Creates a new SQLiteCommand given the command text with named arguments. Place "@abcd" or "$abcd"
+	/// in the command text for each of the arguments. "abcd" represents an alphanumeric identifier.
+	/// For example, @name, :name and $name can all be used in the query.
+	/// </summary>
+	/// <param name="cmdText">
+	/// The fully escaped SQL.
+	/// </param>
+	/// <param name="namedParameters">
+	/// Arguments to substitute for the occurrences of "[@:$]VVV" in the command text.
+	/// </param>
+	/// <returns>
+	/// A <see cref="SQLiteCommand" />
+	/// </returns>
+	public SQLiteCommand CreateCommand(string cmdText, Dictionary<string, object> namedParameters)
+	{
+		if (!_open)
+			throw new SQLiteException(SQLite3Native.Result.Error, "Cannot create commands from unopened database");
+
+		SQLiteCommand cmd = new SQLiteCommand(this);
+		cmd.CommandText = cmdText;
+
+		foreach (var kv in namedParameters)
+			cmd.Bind(kv.Key, kv.Value);
+
+		return cmd;
+	}
+
+	/// <summary>
+	/// Creates a SQLiteCommand given the command text (SQL) with arguments. Place a '?'
+	/// in the command text for each of the arguments and then executes that command.
+	/// Use this method instead of Query when you don't expect rows back. Such cases include
+	/// INSERTs, UPDATEs, and DELETEs.
+	/// You can set the Trace or TimeExecution properties of the connection
+	/// to profile execution.
+	/// </summary>
+	/// <param name="query">
+	/// The fully escaped SQL.
+	/// </param>
+	/// <param name="args">
+	/// Arguments to substitute for the occurrences of '?' in the query.
+	/// </param>
+	/// <returns>
+	/// The number of rows modified in the database as a result of this execution.
+	/// </returns>
+	public int Execute(string query, params object[] args)
+	{
+		var cmd = CreateCommand(query, args);
+
+		if (Tracer != null)
+		{
+			_sw.Reset();
+			_sw.Start();
+		}
+
+		var rows = cmd.ExecuteNonQuery();
+
+		if (Tracer != null)
+		{
+			_sw.Stop();
+			_elapsedMilliseconds += _sw.ElapsedMilliseconds;
+			Tracer?.Invoke($"Finished in {_sw.ElapsedMilliseconds} ms ({_elapsedMilliseconds / 1000.0:0.0} s total)");
+		}
+
+		return rows;
+	}
+
+	/// <summary>
+	/// Creates a SQLiteCommand given the command text (SQL) with arguments. Place a '?'
+	/// in the command text for each of the arguments and then executes that command.
+	/// Use this method when return primitive values.
+	/// You can set the Trace or TimeExecution properties of the connection
+	/// to profile execution.
+	/// </summary>
+	/// <param name="query">
+	/// The fully escaped SQL.
+	/// </param>
+	/// <param name="args">
+	/// Arguments to substitute for the occurrences of '?' in the query.
+	/// </param>
+	/// <returns>
+	/// The number of rows modified in the database as a result of this execution.
+	/// </returns>
+	public T ExecuteScalar<T>(string query, params object[] args)
+	{
+		var cmd = CreateCommand(query, args);
+
+		if (Tracer != null)
+		{
+			_sw.Reset();
+			_sw.Start();
+		}
+
+		var rows = cmd.ExecuteScalar<T>();
+
+		if (Tracer != null)
+		{
+			_sw.Stop();
+			_elapsedMilliseconds += _sw.ElapsedMilliseconds;
+			Tracer?.Invoke($"Finished in {_sw.ElapsedMilliseconds} ms ({_elapsedMilliseconds / 1000.0:0.0} s total)");
+		}
+
+		return rows;
+	}
+
+	#endregion
+
+	#region Query
+
+	/// <summary>
+	/// Creates a SQLiteCommand given the command text (SQL) with arguments. Place a '?'
+	/// in the command text for each of the arguments and then executes that command.
+	/// It returns each row of the result using the mapping automatically generated for
+	/// the given type.
+	/// </summary>
+	/// <typeparam name="T">
+	///	The type to load data into. This can be of three category of types:<br/>
+	/// - A regular class/struct that contains column definitions as properties.<br/>
+	/// - A <see cref="ValueTuple"/> with up to 7 arguments. Note that the values are loaded positionally and not by name; make sure the positions of the values match up with the statement.<br/>
+	/// - A scalar type (e.g. string, int). The value in the first column is parsed as this scalar type and returned.
+	/// </typeparam>
+	/// <param name="query">
+	/// The fully escaped SQL.
+	/// </param>
+	/// <param name="args">
+	/// Arguments to substitute for the occurrences of '?' in the query.
+	/// </param>
+	/// <returns>
+	/// An enumerable with one result for each row returned by the query.
+	/// The enumerator (retrieved by calling GetEnumerator() on the result of this method)
+	/// will call sqlite3_step on each call to MoveNext, so the database
+	/// connection must remain open for the lifetime of the enumerator.
+	/// </returns>
+	public IEnumerable<T> Query<
+		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
+		T>(string query, params object[] args)
+	{
+		var cmd = CreateCommand(query, args);
+		return cmd.ExecuteQuery<T>();
+	}
+
+	/// <summary>
+	/// Creates a SQLiteCommand given the command text (SQL) with arguments. Place a '?'
+	/// in the command text for each of the arguments and then executes that command.
+	/// It returns each row of the result using the mapping automatically generated for
+	/// the given type.
+	/// </summary>
+	/// <typeparam name="T">
+	///	The type to load data into. This type must correspond with the data type the <see cref="TableMapping"/> was constructed with, or a base type (including <see cref="object"/>).
+	/// </typeparam>
+	/// <param name="map">
+	/// A <see cref="TableMapping"/> to use to convert the resulting rows
+	/// into objects.
+	/// </param>
+	/// <param name="query">
+	/// The fully escaped SQL.
+	/// </param>
+	/// <param name="args">
+	/// Arguments to substitute for the occurrences of '?' in the query.
+	/// </param>
+	/// <returns>
+	/// An enumerable with one result for each row returned by the query.
+	/// The enumerator (retrieved by calling GetEnumerator() on the result of this method)
+	/// will call sqlite3_step on each call to MoveNext, so the database
+	/// connection must remain open for the lifetime of the enumerator.
+	/// </returns>
+	public IEnumerable<T> Query<
+		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
+		T>(TableMapping map, string query, params object[] args)
+	{
+		var cmd = CreateCommand(query, args);
+		return cmd.ExecuteQuery<T>(map);
+	}
+
+	/// <summary>
+	/// Creates a query using the table defined by the <typeparam name="T">type</typeparam>, and returns fetched data.
+	/// </summary>
+	/// <typeparam name="T">
+	///	The type to load data into. This must be a type that can be used to build a table definition.
+	/// </typeparam>
+	/// <param name="predicate">
+	/// A predicate on which to filter rows on, as a WHERE query.
+	/// </param>
+	/// <returns>
+	/// An enumerable with one result for each row returned by the query.
+	/// The enumerator (retrieved by calling GetEnumerator() on the result of this method)
+	/// will call sqlite3_step on each call to MoveNext, so the database
+	/// connection must remain open for the lifetime of the enumerator.
+	/// </returns>
+	public IEnumerable<T> Query<
+		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
+		T>(Expression<Func<T, bool>> predicate) where T : new()
+	{
+		return Table<T>().Where(predicate);
+	}
+
+	/// <summary>
+	/// Creates a query using the table defined by the <typeparam name="T">type</typeparam>, and returns fetched data.
+	/// </summary>
+	/// <param name="map">
+	/// A <see cref="TableMapping"/> to use to convert the resulting rows into objects.
+	/// </param>
+	/// <typeparam name="T">
+	///	The type to load data into. This type must correspond with the data type the <see cref="TableMapping"/> was constructed with, or a base type (including <see cref="object"/>).
+	/// </typeparam>
+	/// <param name="predicate">
+	/// A predicate on which to filter rows on, as a WHERE query.
+	/// </param>
+	/// <returns>
+	/// An enumerable with one result for each row returned by the query.
+	/// The enumerator (retrieved by calling GetEnumerator() on the result of this method)
+	/// will call sqlite3_step on each call to MoveNext, so the database
+	/// connection must remain open for the lifetime of the enumerator.
+	/// </returns>
+	public IEnumerable<T> Query<
+		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
+		T>(TableMapping map, Expression<Func<T, bool>> predicate) where T : new()
+	{
+		return Table<T>(map).Where(predicate);
+	}
+
+	/// <summary>
+	/// Attempts to retrieve an object with the given primary key from the table
+	/// associated with the specified type. Use of this method requires that the type has primary key(s) defined.
+	/// </summary>
+	/// <param name="primaryKey">
+	/// The primary key. Provide multiple objects for a table with a composite primary key.
+	/// </param>
+	/// <returns>
+	/// The object with the given primary key or null
+	/// if the object is not found.
+	/// </returns>
+	public T? Find<
+		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
+		T>(params object[] primaryKey) where T : new()
+	{
+		return Find<T>(GetMapping<T>(), primaryKey);
+	}
+
+	/// <summary>
+	/// Attempts to retrieve an object with the given primary key from the provided map.
+	/// Use of this method requires that the map has primary keys defined.
+	/// </summary>
+	/// <param name="primaryKey">
+	/// The primary key. Provide multiple objects for a table with a composite primary key.
+	/// </param>
+	/// <returns>
+	/// The object with the given primary key or null
+	/// if the object is not found.
+	/// </returns>
+	public T? Find<
+		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
+		T>(TableMapping map, params object[] primaryKey)
+	{
+		if (map.PrimaryKeyColumns.Length == 0)
+			throw new ArgumentException("Cannot use Find() on a table that does not have a primary key");
+
+		if (primaryKey.Length == 0)
+			throw new ArgumentException("A primary key must be provided");
+
+		return Query<T>(map, $"select * from \"{map.TableName}\" {map.PKWhereSql}", primaryKey).FirstOrDefault();
+	}
+
+	/// <summary>
+	/// Attempts to retrieve the first object that matches the predicate from the table
+	/// associated with the specified type.
+	/// </summary>
+	/// <param name="predicate">
+	/// A predicate for which object to find.
+	/// </param>
+	/// <returns>
+	/// The object that matches the given predicate or null
+	/// if the object is not found.
+	/// </returns>
+	public T Find<
+		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
+		T>(Expression<Func<T, bool>> predicate) where T : new()
+	{
+		return Table<T>().Where(predicate).FirstOrDefault();
+	}
+
+	/// <summary>
+	/// Attempts to retrieve the first object that matches the predicate from the table
+	/// associated with the specified type.
+	/// </summary>
+	/// <param name="predicate">
+	/// A predicate for which object to find.
+	/// </param>
+	/// <returns>
+	/// The object that matches the given predicate or null
+	/// if the object is not found.
+	/// </returns>
+	public T Find<
+		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
+		T>(TableMapping map, Expression<Func<T, bool>> predicate) where T : new()
+	{
+		return Table<T>(map).Where(predicate).FirstOrDefault();
+	}
+
+	#endregion
+
+	#region Insert
 
 	/// <summary>
 	/// Inserts the given object (and updates its
@@ -1933,85 +1325,16 @@ public partial class SQLiteConnection : IDisposable
 	/// <returns>
 	/// The number of rows added to the table.
 	/// </returns>
-	[RequiresUnreferencedCode("This method requires ''DynamicallyAccessedMemberTypes.All' on the runtime type of 'obj'.")]
-	public int Insert(object obj)
+	public int Insert<
+		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
+		T>(T obj, InsertConflictAction conflictAction = InsertConflictAction.Abort)
 	{
 		if (obj == null)
-		{
 			return 0;
-		}
-		return Insert(obj, "", Orm.GetType(obj));
-	}
 
-	/// <summary>
-	/// Inserts the given object (and updates its
-	/// auto incremented primary key if it has one).
-	/// The return value is the number of rows added to the table.
-	/// If a UNIQUE constraint violation occurs with
-	/// some pre-existing object, this function deletes
-	/// the old object.
-	/// </summary>
-	/// <param name="obj">
-	/// The object to insert.
-	/// </param>
-	/// <returns>
-	/// The number of rows modified.
-	/// </returns>
-	[RequiresUnreferencedCode("This method requires ''DynamicallyAccessedMemberTypes.All' on the runtime type of 'obj'.")]
-	public int InsertOrReplace(object obj)
-	{
-		if (obj == null)
-		{
-			return 0;
-		}
-		return Insert(obj, "OR REPLACE", Orm.GetType(obj));
-	}
+		var map = typeof(T) == typeof(object) ? GetMapping(obj.GetType()) : GetMapping<T>();
 
-	/// <summary>
-	/// Inserts the given object (and updates its
-	/// auto incremented primary key if it has one).
-	/// The return value is the number of rows added to the table.
-	/// </summary>
-	/// <param name="obj">
-	/// The object to insert.
-	/// </param>
-	/// <param name="objType">
-	/// The type of object to insert.
-	/// </param>
-	/// <returns>
-	/// The number of rows added to the table.
-	/// </returns>
-	public int Insert(
-		object obj,
-		[DynamicallyAccessedMembers (DynamicallyAccessedMemberTypes.All)]
-		Type objType)
-	{
-		return Insert(obj, "", objType);
-	}
-
-	/// <summary>
-	/// Inserts the given object (and updates its
-	/// auto incremented primary key if it has one).
-	/// The return value is the number of rows added to the table.
-	/// If a UNIQUE constraint violation occurs with
-	/// some pre-existing object, this function deletes
-	/// the old object.
-	/// </summary>
-	/// <param name="obj">
-	/// The object to insert.
-	/// </param>
-	/// <param name="objType">
-	/// The type of object to insert.
-	/// </param>
-	/// <returns>
-	/// The number of rows modified.
-	/// </returns>
-	public int InsertOrReplace(
-		object obj,
-		[DynamicallyAccessedMembers (DynamicallyAccessedMemberTypes.All)]
-		Type objType)
-	{
-		return Insert(obj, "OR REPLACE", objType);
+		return Insert(map, obj, conflictAction);
 	}
 
 	/// <summary>
@@ -2025,72 +1348,15 @@ public partial class SQLiteConnection : IDisposable
 	/// <param name="extra">
 	/// Literal SQL code that gets placed into the command. INSERT {extra} INTO ...
 	/// </param>
-	/// <returns>
-	/// The number of rows added to the table.
-	/// </returns>
-	[RequiresUnreferencedCode("This method requires ''DynamicallyAccessedMemberTypes.All' on the runtime type of 'obj'.")]
-	public int Insert(object obj, string extra)
-	{
-		if (obj == null)
-		{
-			return 0;
-		}
-		return Insert(obj, extra, Orm.GetType(obj));
-	}
-
-	/// <summary>
-	/// Inserts the given object (and updates its
-	/// auto incremented primary key if it has one).
-	/// The return value is the number of rows added to the table.
-	/// </summary>
-	/// <param name="obj">
-	/// The object to insert.
-	/// </param>
-	/// <param name="extra">
-	/// Literal SQL code that gets placed into the command. INSERT {extra} INTO ...
-	/// </param>
 	/// <param name="objType">
 	/// The type of object to insert.
 	/// </param>
 	/// <returns>
 	/// The number of rows added to the table.
 	/// </returns>
-	public int Insert(
-		object obj,
-		string extra,
-		[DynamicallyAccessedMembers (DynamicallyAccessedMemberTypes.All)]
-		Type objType)
-	{
-		if (obj == null || objType == null)
-		{
-			return 0;
-		}
-
-		var map = GetMapping(objType);
-		return Insert(obj, extra, map);
-	}
-
-	/// <summary>
-	/// Inserts the given object (and updates its
-	/// auto incremented primary key if it has one).
-	/// The return value is the number of rows added to the table.
-	/// </summary>
-	/// <param name="obj">
-	/// The object to insert.
-	/// </param>
-	/// <param name="extra">
-	/// Literal SQL code that gets placed into the command. INSERT {extra} INTO ...
-	/// </param>
-	/// <param name="objType">
-	/// The type of object to insert.
-	/// </param>
-	/// <returns>
-	/// The number of rows added to the table.
-	/// </returns>
-	public int Insert(
-		object obj,
-		string extra,
-		TableMapping map)
+	public int Insert<
+		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
+		T>(TableMapping map, T obj, InsertConflictAction conflictAction = InsertConflictAction.Abort)
 	{
 		if (obj == null || map == null)
 		{
@@ -2104,17 +1370,15 @@ public partial class SQLiteConnection : IDisposable
 				map.PrimaryKeyColumns[0].SetValue(obj, Guid.NewGuid());
 			}
 		}
-
-		var replacing = string.Compare(extra, "OR REPLACE", StringComparison.OrdinalIgnoreCase) == 0;
-
-		var cols = replacing ? map.InsertOrReplaceColumns : map.InsertColumns;
+		
+		var cols = conflictAction == InsertConflictAction.Replace ? map.InsertOrReplaceColumns : map.InsertColumns;
 		var vals = new object[cols.Length];
 		for (var i = 0; i < vals.Length; i++)
 		{
 			vals[i] = cols[i].GetValue(obj);
 		}
 
-		var insertCmd = GetInsertCommand(map, extra);
+		var insertCmd = GetInsertCommand(map, conflictAction);
 		int count;
 
 		lock (insertCmd)
@@ -2127,9 +1391,9 @@ public partial class SQLiteConnection : IDisposable
 			}
 			catch (SQLiteException ex)
 			{
-				if (SQLite3Native.ExtendedErrCode(this.Handle) == SQLite3Native.ExtendedResult.ConstraintNotNull)
+				if (SQLite3Native.ExtendedErrCode(Handle) == SQLite3Native.ExtendedResult.ConstraintNotNull)
 				{
-					throw NotNullConstraintViolationException.New(ex.Result, ex.Message, map, obj);
+					throw new NotNullConstraintViolationException(ex.Result, ex.Message, map, obj);
 				}
 				throw;
 			}
@@ -2144,13 +1408,94 @@ public partial class SQLiteConnection : IDisposable
 		return count;
 	}
 
-	readonly Dictionary<Tuple<string, string>, PreparedSqlLiteInsertCommand> _insertCommandMap = new Dictionary<Tuple<string, string>, PreparedSqlLiteInsertCommand>();
-
-	PreparedSqlLiteInsertCommand GetInsertCommand(TableMapping map, string extra)
+	/// <summary>
+	/// Inserts all specified objects.
+	/// </summary>
+	/// <param name="objects">
+	/// An <see cref="IEnumerable"/> of the objects to insert.
+	/// </param>
+	/// <param name="runInTransaction">
+	/// A boolean indicating if the inserts should be wrapped in a transaction.
+	/// </param>
+	/// <returns>
+	/// The number of rows added to the table.
+	/// </returns>
+	public int InsertAll<
+		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] 
+		T>(IEnumerable<T> objects, InsertConflictAction conflictAction = InsertConflictAction.Abort, bool runInTransaction = true)
 	{
-		PreparedSqlLiteInsertCommand prepCmd;
+		return InsertAll(GetMapping<T>(), objects, conflictAction, runInTransaction);
+	}
 
-		var key = Tuple.Create(map.MappedType.FullName, extra);
+	/// <summary>
+	/// Inserts all specified objects.
+	/// </summary>
+	/// <param name="objects">
+	/// An <see cref="IEnumerable"/> of the objects to insert.
+	/// </param>
+	/// <param name="objType">
+	/// The type of object to insert.
+	/// </param>
+	/// <param name="runInTransaction">
+	/// A boolean indicating if the inserts should be wrapped in a transaction.
+	/// </param>
+	/// <returns>
+	/// The number of rows added to the table.
+	/// </returns>
+	public int InsertAll<
+		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
+		T>(
+		TableMapping map,
+		IEnumerable<T> objects,
+		InsertConflictAction conflictAction = InsertConflictAction.Abort,
+		bool runInTransaction = true)
+	{
+		var insertCommand = GetInsertCommand(map, conflictAction);
+		var cols = conflictAction == InsertConflictAction.Replace ? map.InsertOrReplaceColumns : map.InsertColumns;
+		var vals = new object[cols.Length];
+
+		int InnerLoop()
+		{
+			int count = 0;
+
+			foreach (var obj in objects)
+			{
+				for (var i = 0; i < vals.Length; i++)
+				{
+					vals[i] = cols[i].GetValue(obj);
+				}
+
+				count += insertCommand.ExecuteNonQuery(vals);
+				map.SetAutoIncPK(obj, SQLite3Native.LastInsertRowid(Handle));
+			}
+
+			return count;
+		}
+
+		if (runInTransaction)
+		{
+			var count = 0;
+
+			using (var scope = CreateTransactionScope())
+			{
+				count = InnerLoop();
+				scope.Commit();
+			}
+
+			return count;
+		}
+
+		return InnerLoop();
+	}
+
+	readonly Dictionary<Tuple<TableMapping, InsertConflictAction>, PreparedInsertCommand> _insertCommandMap = new Dictionary<Tuple<TableMapping, InsertConflictAction>, PreparedInsertCommand>();
+
+	PreparedInsertCommand GetInsertCommand(TableMapping map, InsertConflictAction conflictAction)
+	{
+		PreparedInsertCommand prepCmd;
+
+		// TODO: this feels like a ticking timebomb. if someone migrates or changes a mapping, this dictionary is going to be out of date yet still used
+		var key = Tuple.Create(map, conflictAction);
 
 		lock (_insertCommandMap)
 		{
@@ -2160,7 +1505,7 @@ public partial class SQLiteConnection : IDisposable
 			}
 		}
 
-		prepCmd = CreateInsertCommand(map, extra);
+		prepCmd = CreateInsertCommand(map, conflictAction);
 
 		lock (_insertCommandMap)
 		{
@@ -2176,34 +1521,45 @@ public partial class SQLiteConnection : IDisposable
 		return prepCmd;
 	}
 
-	PreparedSqlLiteInsertCommand CreateInsertCommand(TableMapping map, string extra)
+	PreparedInsertCommand CreateInsertCommand(TableMapping map, InsertConflictAction conflictAction)
 	{
 		var cols = map.InsertColumns;
 		string insertSql;
+
+		string orAction = conflictAction switch
+		{
+			InsertConflictAction.Abort => "",
+			InsertConflictAction.Fail => " OR FAIL",
+			InsertConflictAction.Ignore => " OR IGNORE",
+			InsertConflictAction.Replace => " OR REPLACE",
+			InsertConflictAction.Rollback => " OR ROLLBACK",
+			_ => ""
+		};
+
 		if (cols.Length == 0 && map.Columns.Length == 1 && map.Columns[0].IsAutoInc)
 		{
-			insertSql = string.Format("insert {1} into \"{0}\" default values", map.TableName, extra);
+			insertSql = $"INSERT{orAction} INTO \"{map.TableName}\" DEFAULT VALUES";
 		}
 		else
 		{
-			var replacing = string.Compare(extra, "OR REPLACE", StringComparison.OrdinalIgnoreCase) == 0;
-
-			if (replacing)
+			if (conflictAction == InsertConflictAction.Replace)
 			{
 				cols = map.InsertOrReplaceColumns;
 			}
 
-			insertSql = string.Format("insert {3} into \"{0}\"({1}) values ({2})", map.TableName,
-				string.Join(",", (from c in cols
-					select "\"" + c.Name + "\"").ToArray()),
-				string.Join(",", (from c in cols
-					select "?").ToArray()), extra);
+			var columnNames = string.Join(",", cols.Select(c => $"\"{c.Name}\""));
+			var valueSlots = string.Join(",", Enumerable.Repeat("?", cols.Length));
 
+			insertSql = $"INSERT{orAction} INTO \"{map.TableName}\"({columnNames})VALUES({valueSlots})";
 		}
 
-		var insertCommand = new PreparedSqlLiteInsertCommand(this, insertSql);
+		var insertCommand = new PreparedInsertCommand(this, insertSql);
 		return insertCommand;
 	}
+
+	#endregion
+
+	#region Update
 
 	/// <summary>
 	/// Updates all of the columns of a table using the specified object
@@ -2217,13 +1573,16 @@ public partial class SQLiteConnection : IDisposable
 	/// The number of rows updated.
 	/// </returns>
 	[RequiresUnreferencedCode("This method requires ''DynamicallyAccessedMemberTypes.All' on the runtime type of 'obj'.")]
-	public int Update(object obj)
+	public int Update<
+		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
+		T>(T obj)
 	{
 		if (obj == null)
-		{
 			return 0;
-		}
-		return Update(obj, Orm.GetType(obj));
+
+		var map = typeof(T) == typeof(object) ? GetMapping(obj.GetType()) : GetMapping<T>();
+
+		return Update(map, obj);
 	}
 
 	/// <summary>
@@ -2240,22 +1599,16 @@ public partial class SQLiteConnection : IDisposable
 	/// <returns>
 	/// The number of rows updated.
 	/// </returns>
-	public int Update(
-		object obj,
-		[DynamicallyAccessedMembers (DynamicallyAccessedMemberTypes.All)]
-		Type objType)
+	public int Update<
+		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
+		T>(TableMapping map, T obj)
 	{
-		int rowsAffected = 0;
-		if (obj == null || objType == null)
-		{
+		if (obj == null)
 			return 0;
-		}
-
-		var map = GetMapping(objType);
 
 		if (map.PrimaryKeyColumns.Length == 0)
 		{
-			throw new NotSupportedException("Cannot update " + map.TableName + ": it has no PK");
+			throw new NotSupportedException($"Cannot update {map.TableName}: it has no PK");
 		}
 
 		// TODO: optimize this & all non-setup LINQ
@@ -2280,20 +1633,17 @@ public partial class SQLiteConnection : IDisposable
 
 		try
 		{
-			rowsAffected = Execute(q, ps.ToArray());
+			return Execute(q, ps.ToArray());
 		}
 		catch (SQLiteException ex)
 		{
-
-			if (ex.Result == SQLite3Native.Result.Constraint && SQLite3Native.ExtendedErrCode(this.Handle) == SQLite3Native.ExtendedResult.ConstraintNotNull)
+			if (ex.Result == SQLite3Native.Result.Constraint && SQLite3Native.ExtendedErrCode(Handle) == SQLite3Native.ExtendedResult.ConstraintNotNull)
 			{
-				throw NotNullConstraintViolationException.New(ex, map, obj);
+				throw new NotNullConstraintViolationException(ex.Result, ex.Message, map, obj);
 			}
 
 			throw;
 		}
-
-		return rowsAffected;
 	}
 
 	/// <summary>
@@ -2309,27 +1659,63 @@ public partial class SQLiteConnection : IDisposable
 	/// The number of rows modified.
 	/// </returns>
 	[RequiresUnreferencedCode("This method requires ''DynamicallyAccessedMemberTypes.All' on the runtime type of all objects in 'objects'.")]
-	public int UpdateAll(System.Collections.IEnumerable objects, bool runInTransaction = true)
+	public int UpdateAll<
+		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
+		T>(IEnumerable<T> objects, bool runInTransaction = true)
 	{
-		var c = 0;
+		return UpdateAll(GetMapping<T>(), objects, runInTransaction);
+	}
+
+	/// <summary>
+	/// Updates all specified objects.
+	/// </summary>
+	/// <param name="objects">
+	/// An <see cref="IEnumerable"/> of the objects to insert.
+	/// </param>
+	/// <param name="runInTransaction">
+	/// A boolean indicating if the inserts should be wrapped in a transaction
+	/// </param>
+	/// <returns>
+	/// The number of rows modified.
+	/// </returns>
+	[RequiresUnreferencedCode("This method requires ''DynamicallyAccessedMemberTypes.All' on the runtime type of all objects in 'objects'.")]
+	public int UpdateAll<
+		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
+		T>(TableMapping map, IEnumerable<T> objects, bool runInTransaction = true)
+	{
+		// TODO: needs a prepared statement
+
+		int InnerLoop()
+		{
+			int count = 0;
+
+			foreach (var obj in objects)
+			{
+				count += Update(map, obj);
+			}
+
+			return count;
+		}
+
 		if (runInTransaction)
 		{
-			RunInTransaction(() => {
-				foreach (var r in objects)
-				{
-					c += Update(r);
-				}
-			});
-		}
-		else
-		{
-			foreach (var r in objects)
+			var count = 0;
+
+			using (var scope = CreateTransactionScope())
 			{
-				c += Update(r);
+				count = InnerLoop();
+				scope.Commit();
 			}
+
+			return count;
 		}
-		return c;
+
+		return InnerLoop();
 	}
+
+	#endregion
+
+	#region Delete
 
 	/// <summary>
 	/// Deletes the given object from the database using its primary key.
@@ -2371,9 +1757,9 @@ public partial class SQLiteConnection : IDisposable
 	/// </typeparam>
 	public int Delete<
 		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
-		T>(object primaryKey)
+		T>(params object[] primaryKey)
 	{
-		return Delete(primaryKey, GetMapping(typeof(T)));
+		return Delete(GetMapping<T>(), primaryKey);
 	}
 
 	/// <summary>
@@ -2388,12 +1774,11 @@ public partial class SQLiteConnection : IDisposable
 	/// <returns>
 	/// The number of objects deleted.
 	/// </returns>
-	public int Delete(object primaryKey, TableMapping map)
+	public int Delete(TableMapping map, params object[] primaryKey)
 	{
 		if (map.PrimaryKeyColumns.Length == 0)
-		{
-			throw new NotSupportedException("Cannot delete " + map.TableName + ": it has no PK");
-		}
+			throw new ArgumentException("Cannot delete with this table mapping as it has no primary key");
+
 		var q = $"delete from \"{map.TableName}\" {map.PKWhereSql}";
 		var count = Execute(q, primaryKey);
 
@@ -2415,8 +1800,7 @@ public partial class SQLiteConnection : IDisposable
 		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
 		T>()
 	{
-		var map = GetMapping(typeof(T));
-		return DeleteAll(map);
+		return DeleteAll(GetMapping<T>());
 	}
 
 	/// <summary>
@@ -2438,6 +1822,8 @@ public partial class SQLiteConnection : IDisposable
 		return count;
 	}
 
+	#endregion
+
 	/// <summary>
 	/// Backup the entire database to the specified path.
 	/// </summary>
@@ -2449,7 +1835,7 @@ public partial class SQLiteConnection : IDisposable
 		var r = SQLite3Native.Open(destinationDatabasePath, out var destHandle);
 		if (r != SQLite3Native.Result.OK)
 		{
-			throw SQLiteException.New(r, "Failed to open destination database");
+			throw new SQLiteException(r, "Failed to open destination database");
 		}
 
 		// Init the backup
@@ -2476,7 +1862,7 @@ public partial class SQLiteConnection : IDisposable
 		SQLite3Native.Close(destHandle);
 		if (r != SQLite3Native.Result.OK)
 		{
-			throw SQLiteException.New(r, msg);
+			throw new SQLiteException(r, msg);
 		}
 	}
 
@@ -2491,47 +1877,42 @@ public partial class SQLiteConnection : IDisposable
 		GC.SuppressFinalize(this);
 	}
 
-	public void Close()
-	{
-		Dispose(true);
-	}
-
 	protected virtual void Dispose(bool disposing)
 	{
-		var useClose2 = LibVersionNumber >= 3007014;
+		if (!_open || Handle == NullHandle)
+			return;
 
-		if (_open && Handle != NullHandle)
+		var useClose2 = LibraryVersion >= new Version(3, 7, 14);
+
+		try
 		{
-			try
+			if (disposing)
 			{
-				if (disposing)
+				lock (_insertCommandMap)
 				{
-					lock (_insertCommandMap)
+					foreach (var sqlInsertCommand in _insertCommandMap.Values)
 					{
-						foreach (var sqlInsertCommand in _insertCommandMap.Values)
-						{
-							sqlInsertCommand.Dispose();
-						}
-						_insertCommandMap.Clear();
+						sqlInsertCommand.Dispose();
 					}
+					_insertCommandMap.Clear();
+				}
 
-					var r = useClose2 ? SQLite3Native.Close2(Handle) : SQLite3Native.Close(Handle);
-					if (r != SQLite3Native.Result.OK)
-					{
-						string msg = SQLite3Native.GetErrmsg(Handle);
-						throw SQLiteException.New(r, msg);
-					}
-				}
-				else
+				var r = useClose2 ? SQLite3Native.Close2(Handle) : SQLite3Native.Close(Handle);
+				if (r != SQLite3Native.Result.OK)
 				{
-					var r = useClose2 ? SQLite3Native.Close2(Handle) : SQLite3Native.Close(Handle);
+					string msg = SQLite3Native.GetErrmsg(Handle);
+					throw new SQLiteException(r, msg);
 				}
 			}
-			finally
+			else
 			{
-				Handle = NullHandle;
-				_open = false;
+				var r = useClose2 ? SQLite3Native.Close2(Handle) : SQLite3Native.Close(Handle);
 			}
+		}
+		finally
+		{
+			Handle = NullHandle;
+			_open = false;
 		}
 	}
 }
@@ -2618,6 +1999,33 @@ public class SQLiteConnectionString
 }
 
 /// <summary>
+/// https://sqlite.org/lang_conflict.html
+/// </summary>
+public enum InsertConflictAction
+{
+	/// <summary>
+	/// Default behavior. Upon conflict, the insert simply fails and does nothing.
+	/// </summary>
+	Abort,
+	/// <summary>
+	/// Upon conflict, the insert simply fails and does nothing. However, if this insert was part of a much larger statement, the statement still saves any changes made.
+	/// </summary>
+	Fail,
+	/// <summary>
+	/// Upon conflict, this insert is ignored and nothing happens without a failure happening.
+	/// </summary>
+	Ignore,
+	/// <summary>
+	/// Upon conflict, the existing row is deleted and the insert is attempted again.
+	/// </summary>
+	Replace,
+	/// <summary>
+	/// Upon conflict, the insert fails and any active transaction is rolled back. If there is no active transaction, it acts the same as <see cref="Abort"/>.
+	/// </summary>
+	Rollback
+}
+
+/// <summary>
 /// Represents a key that can be used to encrypt/decrypt a database.
 /// </summary>
 public struct DatabaseKey
@@ -2638,20 +2046,4 @@ public struct DatabaseKey
 
 	public static implicit operator DatabaseKey(string key) => new(key);
 	public static implicit operator DatabaseKey(byte[] key) => new(key);
-}
-
-public enum CreateTableResult
-{
-	Created,
-	Migrated,
-}
-
-public class CreateTablesResult
-{
-	public Dictionary<Type, CreateTableResult> Results { get; private set; }
-
-	public CreateTablesResult()
-	{
-		Results = new Dictionary<Type, CreateTableResult>();
-	}
 }

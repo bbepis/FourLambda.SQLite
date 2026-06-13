@@ -29,7 +29,7 @@ public class DeleteTest : DBTestHarness
 	[Test]
 	public void DeleteEntityOne()
 	{
-		var r = Database.Delete(Database.Get<TestTable>(1));
+		var r = Database.Delete(Database.Find<TestTable>(1));
 
 		Assert.AreEqual(1, r);
 		Assert.AreEqual(Count - 1, Database.Table<TestTable>().Count());

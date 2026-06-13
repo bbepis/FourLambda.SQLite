@@ -38,19 +38,12 @@ public class TableQuery<
 		Table = table;
 	}
 
-	public TableQuery(SQLiteConnection conn)
-	{
-		Connection = conn;
-		Table = Connection.GetMapping(typeof(T));
-	}
-
 	public TableQuery<U> Clone<
 		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
 		U>()
 	{
 		var q = new TableQuery<U>(Connection, Table);
 		q._where = _where;
-		q._deferred = _deferred;
 		if (_orderBys != null)
 		{
 			q._orderBys = new List<Ordering>(_orderBys);
@@ -149,14 +142,6 @@ public class TableQuery<
 	public T ElementAt(int index)
 	{
 		return Skip(index).Take(1).First();
-	}
-
-	bool _deferred;
-	public TableQuery<T> Deferred()
-	{
-		var q = Clone<T>();
-		q._deferred = true;
-		return q;
 	}
 
 	/// <summary>
@@ -723,31 +708,12 @@ public class TableQuery<
 
 	public IEnumerator<T> GetEnumerator()
 	{
-		if (!_deferred)
-			return GenerateCommand("*").ExecuteQuery<T>().GetEnumerator();
-
-		return GenerateCommand("*").ExecuteDeferredQuery<T>().GetEnumerator();
+		return GenerateCommand("*").ExecuteQuery<T>().GetEnumerator();
 	}
 
-	System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator()
+	IEnumerator IEnumerable.GetEnumerator()
 	{
 		return GetEnumerator();
-	}
-
-	/// <summary>
-	/// Queries the database and returns the results as a List.
-	/// </summary>
-	public List<T> ToList()
-	{
-		return GenerateCommand("*").ExecuteQuery<T>();
-	}
-
-	/// <summary>
-	/// Queries the database and returns the results as an array.
-	/// </summary>
-	public T[] ToArray()
-	{
-		return GenerateCommand("*").ExecuteQuery<T>().ToArray();
 	}
 
 	/// <summary>

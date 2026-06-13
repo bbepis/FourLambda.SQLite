@@ -82,12 +82,21 @@ public class CreateTableTest : DBTestHarness
 		foreach (var itm in query)
 		{
 			itm.OtherValue++;
-			Assert.AreEqual(1, Database.Update(itm, typeof(Issue115_MyObject)));
+			Assert.AreEqual(1, Database.Update(itm));
 		}
 	}
 
 	[Table("WantsNoRowId", WithoutRowId = true)]
 	private class WantsNoRowId
+	{
+		[PrimaryKey]
+		public int Id { get; set; }
+
+		public string Name { get; set; }
+	}
+
+	[Table("WantsStrict", Strict = true)]
+	private class WantsStrict
 	{
 		[PrimaryKey]
 		public int Id { get; set; }
@@ -119,10 +128,22 @@ public class CreateTableTest : DBTestHarness
 	{
 		Database.CreateTable<OrderLine>();
 		var info = Database.Table<SqliteMaster>().First(m => m.TableName == "OrderLine");
-		Assert.That(!info.Sql.Contains("without rowid"));
+		Assert.That(!info.Sql.Contains("without rowid", StringComparison.OrdinalIgnoreCase));
 
 		Database.CreateTable<WantsNoRowId>();
 		info = Database.Table<SqliteMaster>().First(m => m.TableName == "WantsNoRowId");
-		Assert.That(info.Sql.Contains("without rowid"));
+		Assert.That(info.Sql.Contains("without rowid", StringComparison.OrdinalIgnoreCase));
+	}
+
+	[Test]
+	public void Strict()
+	{
+		Database.CreateTable<OrderLine>();
+		var info = Database.Table<SqliteMaster>().First(m => m.TableName == "OrderLine");
+		Assert.That(!info.Sql.Contains("strict", StringComparison.OrdinalIgnoreCase));
+
+		Database.CreateTable<WantsStrict>();
+		info = Database.Table<SqliteMaster>().First(m => m.TableName == "WantsStrict");
+		Assert.That(info.Sql.Contains("strict", StringComparison.OrdinalIgnoreCase));
 	}
 }

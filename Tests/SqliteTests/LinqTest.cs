@@ -82,7 +82,7 @@ public class LinqTest : DBTestHarness
 
 		Assert.AreEqual(3, Database.Table<Product>().Count());
 
-		var r = Database.Get<Product>(x => x.Price == 10);
+		var r = Database.Find<Product>(x => x.Price == 10);
 		Assert.IsNotNull(r);
 		Assert.AreEqual("B", r.Name);
 	}

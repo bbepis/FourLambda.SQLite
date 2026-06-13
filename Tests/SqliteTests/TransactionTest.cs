@@ -28,12 +28,14 @@ public class TransactionTest : DBTestHarness
 	[Test]
 	public void SuccessfulSavepointTransaction()
 	{
-		Database.RunInTransaction(() =>
+		using (var scope = Database.CreateTransactionScope())
 		{
 			Database.Delete(testObjects[0]);
 			Database.Delete(testObjects[1]);
 			Database.Insert(new TestObj());
-		});
+
+			scope.Commit();
+		}
 
 		Assert.AreEqual(testObjects.Count - 1, Database.Table<TestObj>().Count());
 	}
@@ -43,12 +45,13 @@ public class TransactionTest : DBTestHarness
 	{
 		try
 		{
-			Database.RunInTransaction(() =>
+			using (var scope = Database.CreateTransactionScope())
 			{
 				Database.Delete(testObjects[0]);
 
 				throw new TransactionTestException();
-			});
+				scope.Commit();
+			}
 		}
 		catch (TransactionTestException)
 		{
@@ -61,12 +64,18 @@ public class TransactionTest : DBTestHarness
 	[Test]
 	public void SuccessfulNestedSavepointTransaction()
 	{
-		Database.RunInTransaction(() =>
+		using (var scope = Database.CreateTransactionScope())
 		{
 			Database.Delete(testObjects[0]);
 
-			Database.RunInTransaction(() => { Database.Delete(testObjects[1]); });
-		});
+			using (var scope2 = Database.CreateTransactionScope())
+			{
+				Database.Delete(testObjects[1]);
+				scope2.Commit();
+			}
+
+			scope.Commit();
+		}
 
 		Assert.AreEqual(testObjects.Count - 2, Database.Table<TestObj>().Count());
 	}
@@ -76,17 +85,20 @@ public class TransactionTest : DBTestHarness
 	{
 		try
 		{
-			Database.RunInTransaction(() =>
+			using (var scope = Database.CreateTransactionScope())
 			{
 				Database.Delete(testObjects[0]);
 
-				Database.RunInTransaction(() =>
+				using (var scope2 = Database.CreateTransactionScope())
 				{
 					Database.Delete(testObjects[1]);
 
 					throw new TransactionTestException();
-				});
-			});
+					scope2.Commit();
+				}
+
+				scope.Commit();
+			}
 		}
 		catch (TransactionTestException)
 		{
@@ -111,8 +123,10 @@ public class TransactionTest : DBTestHarness
 		var rollbacks = 0;
 		Database.Tracer = m =>
 		{
+			Console.WriteLine(m);
+
 			if (m == "Executing: commit")
-				throw SQLiteException.New(SQLite3Native.Result.Busy, "Make commit fail");
+				throw new SQLiteException(SQLite3Native.Result.Busy, "Make commit fail");
 			if (m == "Executing: rollback")
 				rollbacks++;
 		};
@@ -121,8 +135,6 @@ public class TransactionTest : DBTestHarness
 
 		var ex = Assert.Throws<SQLiteException>(Database.Commit);
 		Assert.AreEqual(SQLite3Native.Result.Busy, ex.Result);
-
-		Database.Trace = false;
 
 		Assert.False(Database.IsInTransaction);
 		Assert.AreEqual(1, rollbacks);
@@ -139,6 +151,7 @@ public class TransactionTest : DBTestHarness
 		// and when begin transaction fails in this manner, the transaction isn't rolled back
 		// (which would have set _transactionDepth to 0)
 		//
+		Database.Tracer = Console.WriteLine;
 		Database.BeginTransaction();
 		Database.Insert(new TestObj());
 		Database.Commit();
@@ -155,7 +168,7 @@ public class TransactionTest : DBTestHarness
 		{
 			//Console.WriteLine (m);
 			if (m.StartsWith("Executing: release"))
-				throw SQLiteException.New(SQLite3Native.Result.Busy, "Make release fail");
+				throw new SQLiteException(SQLite3Native.Result.Busy, "Make release fail");
 			if (m == "Executing: rollback")
 				rollbacks++;
 		};
@@ -164,8 +177,6 @@ public class TransactionTest : DBTestHarness
 
 		var ex = Assert.Throws<SQLiteException>(() => Database.Release(sp0));
 		Assert.AreEqual(SQLite3Native.Result.Busy, ex.Result);
-
-		Database.Trace = false;
 
 		Assert.False(Database.IsInTransaction);
 		Assert.AreEqual(1, rollbacks);

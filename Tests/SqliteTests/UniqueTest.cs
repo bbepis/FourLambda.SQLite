@@ -50,8 +50,8 @@ public class UniqueIndexTest : DBTestHarness
 	public void CreateUniqueIndexes()
 	{
 		Database.CreateTable<TestClass>();
-		var indexes = Database.Query<IndexInfo>($"PRAGMA INDEX_LIST (\"{nameof(TestClass)}\")");
-		Assert.AreEqual(4, indexes.Count, "# of indexes");
+		var indexes = Database.Query<IndexInfo>($"PRAGMA INDEX_LIST (\"{nameof(TestClass)}\")").ToArray();
+		Assert.AreEqual(4, indexes.Length, "# of indexes");
 
 		CheckIndex(indexes, IndexOneName, nameof(TestClass.IndexOneField));
 		CheckIndex(indexes, IndexTwoName, nameof(TestClass.IndexTwoFieldFirstHalf),
@@ -61,7 +61,7 @@ public class UniqueIndexTest : DBTestHarness
 			nameof(TestClass.IndexFourFieldSecondHalf));
 	}
 
-	private void CheckIndex(List<IndexInfo> indexes, string iname, params string[] columns)
+	private void CheckIndex(IndexInfo[] indexes, string iname, params string[] columns)
 	{
 		if (columns == null || columns.Length == 0)
 			throw new ArgumentException("Columns must be provided");
@@ -70,9 +70,9 @@ public class UniqueIndexTest : DBTestHarness
 		Assert.IsNotNull(idx, $"Index {iname} not found");
 		Assert.IsTrue(idx.unique, $"Index {iname} was not unique");
 
-		var idx_columns = Database.Query<IndexColumns>($"PRAGMA INDEX_INFO (\"{iname}\")");
-		Assert.AreEqual(columns.Length, idx_columns.Count,
-			$"# of columns: expected {columns.Length}, got {idx_columns.Count}");
+		var idx_columns = Database.Query<IndexColumns>($"PRAGMA INDEX_INFO (\"{iname}\")").ToArray();
+		Assert.AreEqual(columns.Length, idx_columns.Length,
+			$"# of columns: expected {columns.Length}, got {idx_columns.Length}");
 
 		foreach (var col in columns)
 			Assert.IsNotNull(idx_columns.SingleOrDefault(c => c.name == col), $"Column {col} not in index {idx.name}");

@@ -55,7 +55,7 @@ public class MigrationTest : DBTestHarness
 		//
 		var path = GetDisposablePath();
 
-		using (var db = new SQLiteConnection(path) { Trace = true })
+		using (var db = new SQLiteConnection(path))
 		{
 			path = db.DatabasePath;
 
@@ -79,7 +79,7 @@ public class MigrationTest : DBTestHarness
 		//
 		// Migrate and use it
 		//
-		using (var db = new SQLiteConnection(path) { Trace = true })
+		using (var db = new SQLiteConnection(path))
 		{
 			db.CreateTable<TestAddAfter>();
 
@@ -100,7 +100,7 @@ public class MigrationTest : DBTestHarness
 			};
 			db.Insert(o);
 
-			var ooo = db.Get<TestAddAfter>(o.Id);
+			var ooo = db.Find<TestAddAfter>(o.Id);
 			Assert.AreEqual("Bar", ooo.Name);
 			Assert.AreEqual(42, ooo.IntValue);
 			Assert.AreEqual("Hello", ooo.StringValue);

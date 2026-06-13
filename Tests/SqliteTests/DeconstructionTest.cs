@@ -26,7 +26,7 @@ public class DeconstructionTest : DBTestHarness
 	[Test]
 	public void DeconstructToClass()
 	{
-		var r = Database.Query<GenericObject>("select * from G");
+		var r = Database.Query<GenericObject>("select * from G").ToList();
 
 		Assert.AreEqual(_records.Length, r.Count);
 		Assert.AreEqual(_records[0].Value, r[0].Value);
@@ -38,11 +38,11 @@ public class DeconstructionTest : DBTestHarness
 	[Test]
 	public void DeconstructToValueTuple()
 	{
-		var r = Database.Query<(int Value, double Walue)>("select * from G");
+		var r = Database.Query<(int Value, double DoubleValue)>("select * from G").ToList();
 
 		Assert.AreEqual(_records.Length, r.Count);
 		Assert.AreEqual(_records[0].Value, r[0].Value);
-		Assert.AreEqual(_records[0].DoubleValue, r[0].Walue);
+		Assert.AreEqual(_records[0].DoubleValue, r[0].DoubleValue);
 	}
 
 	#endregion

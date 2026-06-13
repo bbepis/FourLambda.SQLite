@@ -18,15 +18,14 @@ public abstract class DBTestHarness
 	protected void Setup()
 	{
 		Database = new SQLiteConnection(":memory:");
-		Database.Trace = true;
-		Database.Tracer = Console.WriteLine;
+		Database.SetDebugLogger(Console.WriteLine);
 		InitializeDatabase();
 	}
 
 	[TearDown]
 	protected void Teardown()
 	{
-		Database.Close();
+		Database.Dispose();
 
 		foreach (var path in temporaryPaths.ToArray())
 		{

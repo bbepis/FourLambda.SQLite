@@ -66,9 +66,10 @@ public class NotNullAttributeTest : DBTestHarness
 	{
 		Database.CreateTable<NotNullNoPK>();
 		var cols = Database.GetTableInfo(nameof(NotNullNoPK));
+		var expected = GetExpectedColumnInfos(typeof(NotNullNoPK));
 
-		var joined = GetExpectedColumnInfos(typeof(NotNullNoPK))
-			.Join(cols, expected => expected.name, actual => actual.Name,
+
+		var joined = expected.Join(cols, expected => expected.name, actual => actual.Name,
 				(expected, actual) => new { expected, actual })
 			.Where(@t => @t.actual.IsNullable != @t.expected.nullable)
 			.Select(@t => @t.actual.Name)
@@ -217,7 +218,7 @@ public class NotNullAttributeTest : DBTestHarness
 				objectId = 1,
 				OptionalIntProp = 123
 			};
-			Database.InsertOrReplace(obj2);
+			Database.Insert(obj2, InsertConflictAction.Replace);
 		});
 	}
 }

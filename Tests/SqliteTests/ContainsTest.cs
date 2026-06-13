@@ -60,8 +60,6 @@ public class ContainsTest : DBTestHarness
 
 		Database.InsertAll(cq);
 
-		Database.Trace = true;
-
 		var tensq = new string[] { "0", "10", "20" };
 
 		var tens = Database.Table<TestObj>()

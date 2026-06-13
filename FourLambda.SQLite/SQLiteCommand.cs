@@ -1,5 +1,4 @@
-using System.Data.Common;
-using System.Runtime.CompilerServices;
+using System.Xml.Linq;
 
 namespace FourLambda.SQLite;
 
@@ -11,78 +10,140 @@ public class SQLiteCommand(SQLiteConnection conn)
 
 	public int ExecuteNonQuery()
 	{
-		if (conn.Trace)
-		{
-			conn.Tracer?.Invoke("Executing: " + this);
-		}
+		conn.Tracer?.Invoke("Executing: " + this);
 
-		var r = SQLite3Native.Result.OK;
-		var stmt = Prepare();
-		r = SQLite3Native.Step(stmt);
-		Finalize(stmt);
-		if (r == SQLite3Native.Result.Done)
+		var statement = Prepare();
+		var result = SQLite3Native.Step(statement);
+
+		Finalize(statement);
+
+		switch (result)
 		{
-			int rowsAffected = SQLite3Native.Changes(conn.Handle);
-			return rowsAffected;
-		}
-		else if (r == SQLite3Native.Result.Error)
-		{
-			string msg = SQLite3Native.GetErrmsg(conn.Handle);
-			throw SQLiteException.New(r, msg);
-		}
-		else if (r == SQLite3Native.Result.Constraint)
-		{
-			if (SQLite3Native.ExtendedErrCode(conn.Handle) == SQLite3Native.ExtendedResult.ConstraintNotNull)
+			case SQLite3Native.Result.Done:
 			{
-				throw NotNullConstraintViolationException.New(r, SQLite3Native.GetErrmsg(conn.Handle));
+				int rowsAffected = SQLite3Native.Changes(conn.Handle);
+				return rowsAffected;
 			}
+
+			case SQLite3Native.Result.Error:
+			{
+				string msg = SQLite3Native.GetErrmsg(conn.Handle);
+				throw new SQLiteException(result, msg);
+			}
+
+			case SQLite3Native.Result.Constraint when SQLite3Native.ExtendedErrCode(conn.Handle) == SQLite3Native.ExtendedResult.ConstraintNotNull:
+				throw new NotNullConstraintViolationException(result, SQLite3Native.GetErrmsg(conn.Handle), null, null);
+
+			default:
+				throw new SQLiteException(result, SQLite3Native.GetErrmsg(conn.Handle));
 		}
-
-		throw SQLiteException.New(r, SQLite3Native.GetErrmsg(conn.Handle));
 	}
 
-	public IEnumerable<T> ExecuteDeferredQuery<
-		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
-		T>()
+	public T? ExecuteScalar<T>()
 	{
-		if (typeof(T).Name.StartsWith("ValueTuple`"))
-			return ExecuteDeferredQueryAsValueTuple<T>();
+		conn.Tracer?.Invoke("Executing Query: " + this);
 
-		return ExecuteDeferredQuery<T>(conn.GetMapping(typeof(T)));
-	}
+		if (!ValueConverter.TryGetConverterDefinition(typeof(T), out var definition))
+			throw new NotSupportedException("Don't know how to read " + typeof(T));
 
-	public List<T> ExecuteQuery<
-		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
-		T>()
-	{
-		if (typeof(T).Name.StartsWith("ValueTuple`"))
-			return ExecuteDeferredQueryAsValueTuple<T>().ToList();
+		var statement = Prepare();
 
-		return ExecuteDeferredQuery<T>(conn.GetMapping(typeof(T))).ToList();
-	}
-
-	public List<T> ExecuteQuery<T>(TableMapping map)
-	{
-		return ExecuteDeferredQuery<T>(map).ToList();
-	}
-
-
-	public IEnumerable<T> ExecuteDeferredQuery<T>(TableMapping map)
-	{
-		if (conn.Trace)
-		{
-			conn.Tracer?.Invoke("Executing Query: " + this);
-		}
-
-		var stmt = Prepare();
 		try
 		{
-			var cols = new TableColumn?[SQLite3Native.ColumnCount(stmt)];
-			var fastColumnSetters = new Action<T, Sqlite3Statement, int>[SQLite3Native.ColumnCount(stmt)];
+			var result = SQLite3Native.Step(statement);
+
+			switch (result)
+			{
+				case SQLite3Native.Result.Row:
+				{
+					var colType = SQLite3Native.ColumnType(statement, 0);
+
+					return colType == SQLite3Native.ColType.Null ? default : (T?)definition!.StatementGetterBoxed(statement, 0, null, colType);
+				}
+
+				case SQLite3Native.Result.Done:
+					break;
+
+				default:
+					throw new SQLiteException(result, SQLite3Native.GetErrmsg(conn.Handle));
+			}
+		}
+		finally
+		{
+			Finalize(statement);
+		}
+
+		return default;
+	}
+
+	/// <summary>
+	/// Executes the statement held by this command, and returns the data fetched by the command.
+	/// </summary>
+	/// <typeparam name="T">
+	///	The type to load data into. This can be of three category of types:<br/>
+	/// - A regular class/struct that contains column definitions as properties.<br/>
+	/// - A <see cref="ValueTuple"/> with up to 7 arguments. Note that the values are loaded positionally and not by name; make sure the positions of the values match up with the statement.<br/>
+	/// - A scalar type (e.g. string, int). The value in the first column is parsed as this scalar type and returned.
+	/// </typeparam>
+	/// <returns>
+	/// An enumerable with one result for each row returned by the query.
+	/// The enumerator (retrieved by calling GetEnumerator() on the result of this method)
+	/// will call sqlite3_step on each call to MoveNext, so the database
+	/// connection must remain open for the lifetime of the enumerator.
+	/// </returns>
+	public IEnumerable<T> ExecuteQuery<
+		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
+		T>()
+	{
+		if (typeof(T).Name.StartsWith("ValueTuple`"))
+			return ExecuteDeferredQueryIntoValueTuple<T>();
+
+		if (ValueConverter.TryGetConverterDefinition<T>(out var converter))
+		{
+			// only scalar types have a converter definition
+			return ExecuteQueryIntoScalar(converter);
+		}
+
+		return ExecuteQuery<T>(conn.GetMapping<T>());
+	}
+
+	/// <summary>
+	/// Executes the statement held by this command, and returns the data fetched by the command.
+	/// </summary>
+	/// <typeparam name="T">
+	///	The type to load data into. This type must correspond with the data type the <see cref="TableMapping"/> was constructed with, or a base type (including <see cref="object"/>).
+	/// </typeparam>
+	/// <returns>
+	/// An enumerable with one result for each row returned by the query.
+	/// The enumerator (retrieved by calling GetEnumerator() on the result of this method)
+	/// will call sqlite3_step on each call to MoveNext, so the database
+	/// connection must remain open for the lifetime of the enumerator.
+	/// </returns>
+	public IEnumerable<T> ExecuteQuery<T>(TableMapping map)
+	{
+		if (typeof(T) == map.MappedType)
+			return ExecuteQueryIntoObject<T>(map);
+
+		return ExecuteQueryIntoObjectSafe<T>(map);
+	}
+
+	private IEnumerable<T> ExecuteQueryIntoObject<T>(TableMapping map)
+	{
+		conn.Tracer?.Invoke("Executing Query: " + this);
+
+		if (typeof(T) != map.MappedType)
+			throw new ArgumentException("Cannot use this mapping to create objects of type " + typeof(T));
+
+		// TODO: this needs to have a proper wrapper to prevent statement leaks when enumerable doesn't complete
+		var statement = Prepare();
+		try
+		{
+			var cols = new TableColumn?[SQLite3Native.ColumnCount(statement)];
+			var fastColumnSetters = new Action<T, Sqlite3Statement, int>[SQLite3Native.ColumnCount(statement)];
 
 			for (int i = 0; i < cols.Length; i++)
 			{
-				var name = SQLite3Native.ColumnName16(stmt, i);
+				var name = SQLite3Native.ColumnName16(statement, i);
 				
 				var column = cols[i] = map.FindColumn(name);
 
@@ -95,7 +156,7 @@ public class SQLiteCommand(SQLiteConnection conn)
 				fastColumnSetters[i] = definition.StatementSetterGeneric<T>(column);
 			}
 
-			while (SQLite3Native.Step(stmt) == SQLite3Native.Result.Row)
+			while (SQLite3Native.Step(statement) == SQLite3Native.Result.Row)
 			{
 				var obj = Activator.CreateInstance<T>();
 
@@ -104,7 +165,7 @@ public class SQLiteCommand(SQLiteConnection conn)
 					if (cols[i] == null)
 						continue;
 
-					fastColumnSetters[i].Invoke(obj, stmt, i);
+					fastColumnSetters[i].Invoke(obj, statement, i);
 				}
 
 				yield return obj;
@@ -112,35 +173,81 @@ public class SQLiteCommand(SQLiteConnection conn)
 		}
 		finally
 		{
-			SQLite3Native.Finalize(stmt);
+			SQLite3Native.Finalize(statement);
 		}
 	}
 
-	private IEnumerable<T> ExecuteDeferredQueryAsValueTuple<T>()
+	private IEnumerable<T> ExecuteQueryIntoObjectSafe<T>(TableMapping map)
 	{
-		if (conn.Trace)
-		{
-			conn.Tracer?.Invoke("Executing Query: " + this);
-		}
+		conn.Tracer?.Invoke("Executing Query: " + this);
 
-		var fields = typeof(T).GetFields();
+		var targetType = map.MappedType != null && typeof(T).IsAssignableFrom(map.MappedType)
+			? map.MappedType
+			: typeof(T);
 
-		// https://docs.microsoft.com/en-us/dotnet/api/system.valuetuple-8.rest
-		if (fields.Length > 7)
-			throw new NotSupportedException("ValueTuple with more than 7 members not supported due to nesting; see https://docs.microsoft.com/en-us/dotnet/api/system.valuetuple-8.rest");
-
-		var stmt = Prepare();
+		// TODO: this needs to have a proper wrapper to prevent statement leaks when enumerable doesn't complete
+		var statement = Prepare();
 		try
 		{
-			while (SQLite3Native.Step(stmt) == SQLite3Native.Result.Row)
-			{
-				var obj = (object)Activator.CreateInstance<T>();
+			var columnCount = SQLite3Native.ColumnCount(statement);
+			var cols = new (TableColumn?, PropertyInfo?)[columnCount];
+			var converters = new ValueConverter.IGenericConverterDefinition[columnCount];
+			PropertyInfo[]? properties = null;
 
-				for (int i = 0; i < fields.Length; i++)
+			for (int i = 0; i < cols.Length; i++)
+			{
+				var name = SQLite3Native.ColumnName16(statement, i);
+
+				var column = map.FindColumn(name);
+
+				if (column == null)
+					continue;
+
+				if (column.PropertyInfo != null && column.PropertyInfo.DeclaringType.IsAssignableFrom(targetType))
 				{
-					var colType = SQLite3Native.ColumnType(stmt, i);
-					var val = ReadCol(stmt, i, colType, fields[i].FieldType, null);
-					fields[i].SetValue(obj, val);
+					cols[i] = (column, column.PropertyInfo);
+				}
+				else
+				{
+					properties ??= targetType.GetProperties(BindingFlags.Instance | BindingFlags.Public);
+
+					var matchedProperty = properties.FirstOrDefault(x =>
+						x.Name.Equals(name, StringComparison.OrdinalIgnoreCase)
+						&& x.PropertyType == column.ColumnType);
+
+					if (matchedProperty != null)
+						cols[i] = (column, matchedProperty);
+				}
+
+				if (cols[i].Item2 != null)
+				{
+					if (!ValueConverter.TryGetConverterDefinition(cols[i].Item2.PropertyType, out var definition))
+						throw new Exception("Unable to convert column type " + typeof(T));
+
+					converters[i] = definition;
+				}
+			}
+
+			if (cols.All(x => x == default))
+				throw new ArgumentException($"Unable to use type {typeof(T)} to map this statement; no columns match");
+
+			while (SQLite3Native.Step(statement) == SQLite3Native.Result.Row)
+			{
+				var obj = Activator.CreateInstance(targetType);
+
+				for (int i = 0; i < cols.Length; i++)
+				{
+					if (cols[i] == default)
+						continue;
+
+					var colType = SQLite3Native.ColumnType(statement, i);
+
+					if (colType == SQLite3Native.ColType.Null)
+						continue;
+
+					var (column, propertyInfo) = cols[i];
+
+					propertyInfo.SetValue(obj, converters[i].StatementGetterBoxed(statement, i, column, colType));
 				}
 
 				yield return (T)obj;
@@ -148,79 +255,76 @@ public class SQLiteCommand(SQLiteConnection conn)
 		}
 		finally
 		{
-			SQLite3Native.Finalize(stmt);
+			SQLite3Native.Finalize(statement);
 		}
 	}
 
-	public T? ExecuteScalar<T>()
+	private IEnumerable<T> ExecuteDeferredQueryIntoValueTuple<T>()
 	{
-		if (conn.Trace)
-		{
-			conn.Tracer?.Invoke("Executing Query: " + this);
-		}
+		conn.Tracer?.Invoke("Executing Query: " + this);
 
-		T? val = default(T);
+		var fields = typeof(T).GetFields();
 
-		var stmt = Prepare();
+		// https://docs.microsoft.com/en-us/dotnet/api/system.valuetuple-8.rest
+		if (fields.Length > 7)
+			throw new NotSupportedException("ValueTuple with more than 7 members not supported due to nesting; see https://docs.microsoft.com/en-us/dotnet/api/system.valuetuple-8.rest");
 
+		var statement = Prepare();
 		try
 		{
-			var r = SQLite3Native.Step(stmt);
-			if (r == SQLite3Native.Result.Row)
+			var converters = new ValueConverter.IGenericConverterDefinition[SQLite3Native.ColumnCount(statement)];
+
+			// unfortunately, we can't try and match column names to value tuple fields
+			// https://stackoverflow.com/a/46602134
+
+			for (int i = 0; i < converters.Length; i++)
 			{
-				var colType = SQLite3Native.ColumnType(stmt, 0);
-				var colval = ReadCol(stmt, 0, colType, typeof(T), null);
-				if (colval != null)
+				if (!ValueConverter.TryGetConverterDefinition(fields[i].FieldType, out var definition))
+					throw new Exception("Unable to convert column type " + typeof(T));
+
+				converters[i] = definition;
+			}
+
+			while (SQLite3Native.Step(statement) == SQLite3Native.Result.Row)
+			{
+				// needs to be boxed. only way we can fix this is by not using reflection here
+				var obj = (object)Activator.CreateInstance<T>();
+
+				for (int i = 0; i < fields.Length; i++)
 				{
-					val = (T)colval;
+					var colType = SQLite3Native.ColumnType(statement, i);
+					fields[i].SetValue(obj, converters[i].StatementGetterBoxed(statement, i, null, colType));
 				}
-			}
-			else if (r == SQLite3Native.Result.Done)
-			{
-			}
-			else
-			{
-				throw SQLiteException.New(r, SQLite3Native.GetErrmsg(conn.Handle));
+
+				yield return (T)obj;
 			}
 		}
 		finally
 		{
-			Finalize(stmt);
+			SQLite3Native.Finalize(statement);
 		}
-
-		return val;
 	}
 
-	public IEnumerable<T?> ExecuteQueryScalars<T>()
+	private IEnumerable<T> ExecuteQueryIntoScalar<T>(ValueConverter.IConverterDefinition<T> converter)
 	{
-		if (conn.Trace)
-		{
-			conn.Tracer?.Invoke("Executing Query: " + this);
-		}
-		var stmt = Prepare();
+		conn.Tracer?.Invoke("Executing Query: " + this);
+
+		var statement = Prepare();
 		try
 		{
-			if (SQLite3Native.ColumnCount(stmt) < 1)
+			if (SQLite3Native.ColumnCount(statement) < 1)
 			{
 				throw new InvalidOperationException("QueryScalars should return at least one column");
 			}
-			while (SQLite3Native.Step(stmt) == SQLite3Native.Result.Row)
+			while (SQLite3Native.Step(statement) == SQLite3Native.Result.Row)
 			{
-				var colType = SQLite3Native.ColumnType(stmt, 0);
-				var val = ReadCol(stmt, 0, colType, typeof(T), null);
-				if (val == null)
-				{
-					yield return default(T);
-				}
-				else
-				{
-					yield return (T)val;
-				}
+				var colType = SQLite3Native.ColumnType(statement, 0);
+				yield return converter.StatementGetter(statement, 0, null, colType)!;
 			}
 		}
 		finally
 		{
-			Finalize(stmt);
+			Finalize(statement);
 		}
 	}
 
@@ -238,50 +342,37 @@ public class SQLiteCommand(SQLiteConnection conn)
 		Bind(null, val);
 	}
 
-	public override string ToString()
-	{
-		var parts = new string[1 + _bindings.Count];
-		parts[0] = CommandText;
-		var i = 1;
-		foreach (var b in _bindings)
-		{
-			parts[i] = $"  {i - 1}: {b.Value}";
-			i++;
-		}
-		return string.Join(Environment.NewLine, parts);
-	}
-
 	Sqlite3Statement Prepare()
 	{
-		var stmt = SQLite3Native.Prepare2(conn.Handle, CommandText);
-		BindAll(stmt);
-		return stmt;
+		var statement = SQLite3Native.Prepare2(conn.Handle, CommandText);
+		BindAll(statement);
+		return statement;
 	}
 
-	void Finalize(Sqlite3Statement stmt)
+	void Finalize(Sqlite3Statement statement)
 	{
-		SQLite3Native.Finalize(stmt);
+		SQLite3Native.Finalize(statement);
 	}
 
-	void BindAll(Sqlite3Statement stmt)
+	void BindAll(Sqlite3Statement statement)
 	{
 		int nextIdx = 1;
 		foreach (var b in _bindings)
 		{
 			if (b.Name != null)
 			{
-				b.Index = SQLite3Native.BindParameterIndex(stmt, b.Name);
+				b.Index = SQLite3Native.BindParameterIndex(statement, b.Name);
 			}
 			else
 			{
 				b.Index = nextIdx++;
 			}
 
-			BindParameter(stmt, b.Index, b.Value);
+			BindParameter(statement, b.Index, b.Value);
 		}
 	}
 
-	internal static void BindParameter(Sqlite3Statement stmt, int index, object? value)
+	internal static void BindParameter(Sqlite3Statement statement, int index, object? value)
 	{
 		QueryArgument? queryArgument = value as QueryArgument;
 
@@ -292,21 +383,16 @@ public class SQLiteCommand(SQLiteConnection conn)
 
 		if (value == null)
 		{
-			SQLite3Native.BindNull(stmt, index);
+			SQLite3Native.BindNull(statement, index);
 		}
 		else
 		{
 			var clrType = value.GetType();
 
-			if (clrType.IsGenericType && clrType.GetGenericTypeDefinition() == typeof(Nullable<>))
-			{
-				clrType = clrType.GenericTypeArguments[0];
-			}
-
 			if (!ValueConverter.TryGetConverterDefinition(clrType, out var definition))
 				throw new NotSupportedException("Don't know how to read " + clrType);
 
-			definition!.StatementSetterBoxed(stmt, index, queryArgument?.AgainstColumn, value);
+			definition!.StatementSetterBoxed(statement, index, queryArgument?.AgainstColumn, value);
 		}
 	}
 
@@ -319,22 +405,17 @@ public class SQLiteCommand(SQLiteConnection conn)
 		public int Index { get; set; }
 	}
 
-	object? ReadCol(Sqlite3Statement stmt, int index, SQLite3Native.ColType type, Type clrType, TableColumn? column)
+	public override string ToString()
 	{
-		if (type == SQLite3Native.ColType.Null)
+		var parts = new string[1 + _bindings.Count];
+		parts[0] = CommandText;
+		var i = 1;
+		foreach (var b in _bindings)
 		{
-			return null;
+			parts[i] = $"  {i - 1}: {b.Value}";
+			i++;
 		}
-
-		if (clrType.IsGenericType && clrType.GetGenericTypeDefinition() == typeof(Nullable<>))
-		{
-			clrType = clrType.GenericTypeArguments[0];
-		}
-
-		if (!ValueConverter.TryGetConverterDefinition(clrType, out var definition))
-			throw new NotSupportedException("Don't know how to read " + clrType);
-
-		return definition!.StatementGetterBoxed(stmt, index, column, type);
+		return string.Join(Environment.NewLine, parts);
 	}
 }
 
@@ -343,7 +424,7 @@ public class SQLiteCommand(SQLiteConnection conn)
 /// <summary>
 /// Since the insert never changed, we only need to prepare once.
 /// </summary>
-class PreparedSqlLiteInsertCommand : IDisposable
+class PreparedInsertCommand : IDisposable
 {
 	bool Initialized;
 
@@ -354,7 +435,7 @@ class PreparedSqlLiteInsertCommand : IDisposable
 	Sqlite3Statement Statement;
 	static readonly Sqlite3Statement NullStatement = default(Sqlite3Statement);
 
-	public PreparedSqlLiteInsertCommand(SQLiteConnection conn, string commandText)
+	public PreparedInsertCommand(SQLiteConnection conn, string commandText)
 	{
 		Connection = conn;
 		CommandText = commandText;
@@ -364,15 +445,10 @@ class PreparedSqlLiteInsertCommand : IDisposable
 	{
 		if (Initialized && Statement == NullStatement)
 		{
-			throw new ObjectDisposedException(nameof(PreparedSqlLiteInsertCommand));
+			throw new ObjectDisposedException(nameof(PreparedInsertCommand));
 		}
 
-		if (Connection.Trace)
-		{
-			Connection.Tracer?.Invoke("Executing: " + CommandText);
-		}
-
-		var r = SQLite3Native.Result.OK;
+		Connection.Tracer?.Invoke("Executing: " + CommandText);
 
 		if (!Initialized)
 		{
@@ -381,6 +457,7 @@ class PreparedSqlLiteInsertCommand : IDisposable
 		}
 
 		//bind the values.
+
 		if (source != null)
 		{
 			for (int i = 0; i < source.Length; i++)
@@ -388,29 +465,30 @@ class PreparedSqlLiteInsertCommand : IDisposable
 				SQLiteCommand.BindParameter(Statement, i + 1, source[i]);
 			}
 		}
-		r = SQLite3Native.Step(Statement);
 
-		if (r == SQLite3Native.Result.Done)
+		var result = SQLite3Native.Step(Statement);
+
+		if (result == SQLite3Native.Result.Done)
 		{
 			int rowsAffected = SQLite3Native.Changes(Connection.Handle);
 			SQLite3Native.Reset(Statement);
 			return rowsAffected;
 		}
-		else if (r == SQLite3Native.Result.Error)
+		else if (result == SQLite3Native.Result.Error)
 		{
 			string msg = SQLite3Native.GetErrmsg(Connection.Handle);
 			SQLite3Native.Reset(Statement);
-			throw SQLiteException.New(r, msg);
+			throw new SQLiteException(result, msg);
 		}
-		else if (r == SQLite3Native.Result.Constraint && SQLite3Native.ExtendedErrCode(Connection.Handle) == SQLite3Native.ExtendedResult.ConstraintNotNull)
+		else if (result == SQLite3Native.Result.Constraint && SQLite3Native.ExtendedErrCode(Connection.Handle) == SQLite3Native.ExtendedResult.ConstraintNotNull)
 		{
 			SQLite3Native.Reset(Statement);
-			throw NotNullConstraintViolationException.New(r, SQLite3Native.GetErrmsg(Connection.Handle));
+			throw new NotNullConstraintViolationException(result, SQLite3Native.GetErrmsg(Connection.Handle), null, null);
 		}
 		else
 		{
 			SQLite3Native.Reset(Statement);
-			throw SQLiteException.New(r, SQLite3Native.GetErrmsg(Connection.Handle));
+			throw new SQLiteException(result, SQLite3Native.GetErrmsg(Connection.Handle));
 		}
 	}
 
@@ -431,7 +509,7 @@ class PreparedSqlLiteInsertCommand : IDisposable
 		}
 	}
 
-	~PreparedSqlLiteInsertCommand()
+	~PreparedInsertCommand()
 	{
 		Dispose(false);
 	}

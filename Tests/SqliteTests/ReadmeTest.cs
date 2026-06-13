@@ -76,7 +76,7 @@ public class ReadmeTest : DBTestHarness
 	{
 		Database.Execute("create table Stock(Symbol varchar(100) not null)");
 		Database.Execute("insert into Stock(Symbol) values (?)", "MSFT");
-		var stocks = Database.Query<Stock>("select * from Stock");
+		var stocks = Database.Query<Stock>("select * from Stock").ToList();
 
 		Assert.AreEqual(1, stocks.Count);
 		Assert.AreEqual("MSFT", stocks[0].Symbol);

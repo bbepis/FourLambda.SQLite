@@ -110,16 +110,16 @@ public class MappingTest : DBTestHarness
 	{
 		Database.CreateTable<OnlyKeyModel>();
 
-		Database.InsertOrReplace(new OnlyKeyModel { MyModelId = "Foo" });
-		var foo = Database.Get<OnlyKeyModel>("Foo");
+		Database.Insert(new OnlyKeyModel { MyModelId = "Foo" }, InsertConflictAction.Replace);
+		var foo = Database.Find<OnlyKeyModel>("Foo");
 		Assert.AreEqual(foo.MyModelId, "Foo");
 
 		Database.Insert(new OnlyKeyModel { MyModelId = "Bar" });
-		var bar = Database.Get<OnlyKeyModel>("Bar");
+		var bar = Database.Find<OnlyKeyModel>("Bar");
 		Assert.AreEqual(bar.MyModelId, "Bar");
 
 		Database.Update(new OnlyKeyModel { MyModelId = "Foo" });
-		var foo2 = Database.Get<OnlyKeyModel>("Foo");
+		var foo2 = Database.Find<OnlyKeyModel>("Foo");
 		Assert.AreEqual(foo2.MyModelId, "Foo");
 	}
 

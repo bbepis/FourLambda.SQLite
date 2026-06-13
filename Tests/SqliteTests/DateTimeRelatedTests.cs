@@ -25,7 +25,7 @@ public abstract class BaseTemporalTest<TTemporalType> : DBTestHarness where TTem
 	{
 		return TableMappingBuilder.FromType(
 				typeof(TemporalClass),
-				CreateFlags.None,
+				TableCreateFlags.None,
 				colDef =>
 				{
 					if (colDef.Name == nameof(TemporalClass.ModifiedTime))
@@ -43,9 +43,9 @@ public abstract class BaseTemporalTest<TTemporalType> : DBTestHarness where TTem
 			ModifiedTime = TestedValue
 		};
 
-		Database.Insert(o, "", mapping);
+		Database.Insert(mapping, o);
 
-		var o2 = Database.Get<TemporalClass>(o.Id, mapping);
+		var o2 = Database.Find<TemporalClass>(mapping, o.Id);
 		Assert.AreEqual(o.ModifiedTime, o2.ModifiedTime);
 
 		var stored = Database.ExecuteScalar<string>("SELECT ModifiedTime FROM TestObj;");
@@ -71,9 +71,9 @@ public abstract class BaseTemporalTest<TTemporalType> : DBTestHarness where TTem
 		Database.CreateTable(map);
 
 		foreach (var time in NullableTestValues)
-			Database.Insert(new TemporalClass { ModifiedTime = time }, "", map);
+			Database.Insert(map, new TemporalClass { ModifiedTime = time });
 
-		var stored = Database.QueryScalars<string>("SELECT ModifiedTime FROM TestObj;").ToList();
+		var stored = Database.Query<string>("SELECT ModifiedTime FROM TestObj;").ToList();
 
 		// workaround for not being able to use == or > expressions in generic parameter types
 

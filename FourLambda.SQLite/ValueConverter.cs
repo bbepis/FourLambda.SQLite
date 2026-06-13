@@ -194,6 +194,11 @@ public static class ValueConverter
 	{
 		lock (ConverterDefinitions)
 		{
+			if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Nullable<>))
+			{
+				type = type.GenericTypeArguments[0];
+			}
+
 			var result = ConverterDefinitions.TryGetValue(type, out definition);
 
 			if (!result && type.IsEnum)
@@ -207,7 +212,7 @@ public static class ValueConverter
 		}
 	}
 
-	public static bool TryGetConverterDefinition<T>(out IConverterDefinition<T>? definition)
+	public static bool TryGetConverterDefinition<T>([NotNullWhen(true)] out IConverterDefinition<T>? definition)
 	{
 		var result = TryGetConverterDefinition(typeof(T), out var generic);
 

@@ -1,5 +1,29 @@
 namespace FourLambda.SQLite;
 
+/// <summary>
+/// Represents an exception raised from the native SQLite libraries.
+/// </summary>
+/// <param name="nativeResult">The result code from the library.</param>
+/// <param name="message">An associated human-readable string message.</param>
+public class SQLiteException(SQLite3Native.Result nativeResult, string message) : Exception(message)
+{
+	public SQLite3Native.Result Result { get; } = nativeResult;
+}
+
+public class NotNullConstraintViolationException : SQLiteException
+{
+	public IEnumerable<TableColumn> Columns { get; protected set; }
+
+	internal NotNullConstraintViolationException(SQLite3Native.Result nativeResult, string message, TableMapping? mapping, object? obj)
+		: base(nativeResult, message)
+	{
+		if (mapping != null && obj != null)
+		{
+			Columns = mapping.Columns.Where(c => c.IsNullable == false && c.GetValue(obj) == null);
+		}
+	}
+}
+
 public static class SQLite3Native
 {
 	public enum Result : int
@@ -86,7 +110,6 @@ public static class SQLite3Native
 		NoticeRecoverRollback = (Result.Notice | (2 << 8))
 	}
 
-
 	public enum ConfigOption : int
 	{
 		SingleThread = 1,
@@ -141,14 +164,11 @@ public static class SQLite3Native
 
 	public static IntPtr Prepare2(IntPtr db, string query)
 	{
-		IntPtr stmt;
-
-		var r = Prepare2(db, query, System.Text.UTF8Encoding.UTF8.GetByteCount(query), out stmt, IntPtr.Zero);
+		var r = Prepare2(db, query, Encoding.UTF8.GetByteCount(query), out var stmt, IntPtr.Zero);
 
 		if (r != Result.OK)
-		{
-			throw SQLiteException.New(r, GetErrmsg(db));
-		}
+			throw new SQLiteException(r, GetErrmsg(db));
+
 		return stmt;
 	}
 

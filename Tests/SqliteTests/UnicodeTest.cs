@@ -18,7 +18,7 @@ public class UnicodeTest : DBTestHarness
 			Name = UnicodeTestString
 		});
 
-		var p = Database.Get<Product>(1);
+		var p = Database.Find<Product>(1);
 
 		Assert.AreEqual(UnicodeTestString, p.Name);
 	}

@@ -99,7 +99,7 @@ public sealed class TableMapping
 	public TableColumn[] Columns { get; }
 	public TableColumn[] PrimaryKeyColumns { get; }
 	internal string? PKWhereSql { get; }
-	public CreateFlags CreateFlags { get; }
+	public TableCreateFlags CreateFlags { get; }
 	public bool HasAutoIncPK { get; }
 
 	TableColumn? _autoPk;
@@ -113,7 +113,7 @@ internal TableMapping(
 		bool withoutRowId,
 		bool strict,
 		TableColumn[] columns,
-		CreateFlags createFlags)
+		TableCreateFlags createFlags)
 	{
 		MappedType = mappedType;
 		TableName = tableName;
@@ -249,7 +249,7 @@ public sealed class TableColumn
 		};
 	}
 
-	internal string GetCreationSql(bool tableHasCompositeKey)
+	internal string GetCreationSql()
 	{
 		var sqliteType = SqliteType switch
 		{
@@ -261,29 +261,23 @@ public sealed class TableColumn
 			_ => throw new ArgumentOutOfRangeException()
 		};
 
-		string decl = $"\"{Name}\" {sqliteType} ";
-
-		if (!tableHasCompositeKey && IsPK)
-		{
-			decl += "primary key ";
-
-			if (IsAutoInc)
-			{
-				decl += "autoincrement ";
-			}
-		}
+		string decl = $"\"{Name}\" {sqliteType}";
 
 		if (!IsNullable)
 		{
-			decl += "not null ";
+			decl += " not null";
 
-			// TODO: set default value
-			if (SqliteType == SqliteCellType.Integer)
-				decl += "default 0 ";
+			if (!IsPK)
+			{
+				// TODO: set default value for other types
+				if (SqliteType == SqliteCellType.Integer)
+					decl += " default 0";
+			}
 		}
+
 		if (!string.IsNullOrEmpty(Collation))
 		{
-			decl += "collate " + Collation + " ";
+			decl += $" collate {Collation}";
 		}
 
 		return decl;
@@ -308,7 +302,7 @@ public class TableMappingBuilder
 {
 	private Type? _baseType = null;
 
-	public CreateFlags CreateFlags { get; set; }
+	public TableCreateFlags CreateFlags { get; set; }
 	public bool WithoutRowId { get; set; }
 	public bool Strict { get; set; }
 	
@@ -320,7 +314,7 @@ public class TableMappingBuilder
 	public static TableMappingBuilder FromType<
 		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
 		T>(
-		CreateFlags createFlags = CreateFlags.None,
+		TableCreateFlags createFlags = TableCreateFlags.None,
 		Action<ColumnDefinition>? configure = null)
 	{
 		return FromType(typeof(T), createFlags, configure);
@@ -332,7 +326,7 @@ public class TableMappingBuilder
 	/// </summary>
 	public static TableMappingBuilder FromType(
 		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] Type type,
-		CreateFlags createFlags = CreateFlags.None,
+		TableCreateFlags createFlags = TableCreateFlags.None,
 		Action<ColumnDefinition>? configure = null)
 	{
 		var tableAttr = type.GetCustomAttribute<TableAttribute>();
@@ -371,7 +365,7 @@ public class TableMappingBuilder
 		ColumnDefinition[] columns,
 		bool withoutRowId = false,
 		bool strict = false,
-		CreateFlags flags = CreateFlags.None)
+		TableCreateFlags flags = TableCreateFlags.None)
 	{
 		return new TableMappingBuilder
 		{
@@ -450,7 +444,7 @@ public class TableMappingBuilder
 	 /// </summary>
 	public TableMappingBuilder AddColumn(
 		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] PropertyInfo propertyInfo,
-		CreateFlags createFlags = CreateFlags.None,
+		TableCreateFlags createFlags = TableCreateFlags.None,
 		Action<ColumnDefinition>? configure = null)
 	{
 		var colDef = new ColumnDefinition(propertyInfo, createFlags);
@@ -511,9 +505,11 @@ public class ColumnDefinition
 	public Type ColumnType { get; set; }
 	public SqliteCellType? SqliteType { get; set; }
 	public string? Collation { get; set; }
-	public bool IsAutoIncrement { get; set; }
 	public bool IsAutoGuid { get; set; }
-	public int? PKOrder { get; set; }
+	public int? PrimaryKeyPosition { get; set; }
+
+	public bool IsAutoIncrement { get; set; }
+
 	public IEnumerable<IndexedAttribute> Indices { get; set; } = Array.Empty<IndexedAttribute>();
 	public bool IsNullable { get; set; }
 	public int? MaxStringLength { get; set; }
@@ -522,7 +518,7 @@ public class ColumnDefinition
 
 	internal ColumnDefinition(
 		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] PropertyInfo propertyInfo,
-		CreateFlags createFlags = CreateFlags.None)
+		TableCreateFlags createFlags = TableCreateFlags.None)
 	{
 		PropertyInfo = propertyInfo;
 		var memberType = propertyInfo.PropertyType;
@@ -537,18 +533,18 @@ public class ColumnDefinition
 		StoreAsText = memberStoreAsTextAttr != null || memberType.GetCustomAttribute<StoreAsTextAttribute>() != null;
 		StoreAsTextFormat = memberStoreAsTextAttr?.Format;
 
-		PKOrder = propertyInfo.GetCustomAttribute<PrimaryKeyAttribute>()?.Order;
+		PrimaryKeyPosition = propertyInfo.GetCustomAttribute<PrimaryKeyAttribute>()?.Order;
 
-		var implicitPk = (createFlags & CreateFlags.ImplicitPK) == CreateFlags.ImplicitPK &&
-		                 string.Equals(propertyInfo.Name, Orm.ImplicitPkName, StringComparison.OrdinalIgnoreCase);
+		var implicitPk = createFlags.HasFlag(TableCreateFlags.ImplicitPK)
+		                 && string.Equals(propertyInfo.Name, Orm.ImplicitPkName, StringComparison.OrdinalIgnoreCase);
 
-		if (!PKOrder.HasValue && implicitPk)
-			PKOrder = 0;
+		if (!PrimaryKeyPosition.HasValue && implicitPk)
+			PrimaryKeyPosition = 0;
 
-		bool isPk = PKOrder.HasValue;
+		bool isPk = PrimaryKeyPosition.HasValue;
 
 		var isAutoIncrement = propertyInfo.GetCustomAttribute<AutoIncrementAttribute>() != null
-		             || (isPk && createFlags.HasFlag(CreateFlags.AutoIncPK));
+		             || (isPk && createFlags.HasFlag(TableCreateFlags.AutoIncPK));
 
 		IsAutoGuid = isAutoIncrement && ColumnType == typeof(Guid);
 		IsAutoIncrement = isAutoIncrement && !IsAutoGuid;
@@ -566,7 +562,7 @@ public class ColumnDefinition
 		if (explicitlyNull && markedNotNull)
 			throw new ArgumentException("A column cannot be marked as [NotNull] while having an explicitly nullable property type.");
 
-		IsNullable = explicitlyNull || ((createFlags.HasFlag(CreateFlags.ImplicitNullable) || nullabilityInfo.WriteState == NullabilityState.Unknown) && !(isPk || markedNotNull));
+		IsNullable = explicitlyNull || ((createFlags.HasFlag(TableCreateFlags.ImplicitNullable) || nullabilityInfo.WriteState == NullabilityState.Unknown) && !(isPk || markedNotNull));
 		
 		MaxStringLength = propertyInfo.GetCustomAttribute<MaxLengthAttribute>()?.Value;
 	}
@@ -585,9 +581,9 @@ public class ColumnDefinition
 		return this;
 	}
 
-	public ColumnDefinition WithPrimaryKey(int order = 0)
+	public ColumnDefinition WithPrimaryKey(int position = 0)
 	{
-		PKOrder = order;
+		PrimaryKeyPosition = position;
 		return this;
 	}
 
@@ -626,7 +622,7 @@ public class ColumnDefinition
 			Collation,
 			IsAutoIncrement,
 			IsAutoGuid,
-			PKOrder,
+			PrimaryKeyPosition,
 			Indices,
 			IsNullable,
 			MaxStringLength,
