@@ -636,38 +636,10 @@ public class ColumnDefinition
 
 	internal SqliteCellType ComputeSqlCellType()
 	{
-		if (ColumnType == typeof(bool) || ColumnType == typeof(byte) || ColumnType == typeof(ushort) || ColumnType == typeof(sbyte) || ColumnType == typeof(short) || ColumnType == typeof(int) || ColumnType == typeof(uint) || ColumnType == typeof(long) || ColumnType == typeof(ulong))
-		{
-			return SqliteCellType.Integer;
-		}
-		else if (ColumnType == typeof(float) || ColumnType == typeof(double) || ColumnType == typeof(decimal))
-		{
-			return SqliteCellType.Real;
-		}
-		else if (ColumnType == typeof(string))
-		{
-			return SqliteCellType.Text;
-		}
-		else if (ColumnType == typeof(TimeSpan) || ColumnType == typeof(DateTime) || ColumnType == typeof(DateTimeOffset) || ColumnType == typeof(TimeOnly) || ColumnType == typeof(DateOnly) || ColumnType.IsEnum)
-		{
-			return StoreAsText ? SqliteCellType.Text : SqliteCellType.Integer;
-		}
-		else if (ColumnType == typeof(byte[]))
-		{
-			return SqliteCellType.Blob;
-		}
-		else if (ColumnType == typeof(Guid))
-		{
-			return SqliteCellType.Text;
-		}
-		else if (ColumnType == typeof(object))
-		{
-			return SqliteCellType.Any;
-		}
-		else
-		{
+		if (!ValueConverter.TryGetConverterDefinition(ColumnType, out var definition))
 			throw new NotSupportedException("Unable to handle column type " + ColumnType);
-		}
+
+		return definition!.DetermineCellType(this);
 	}
 }
 
