@@ -1,5 +1,6 @@
 ﻿namespace FourLambda.SQLite.Tests;
 
+#if EncryptionEnabled
 [TestFixture]
 public class SQLCipherTest : DBTestHarness
 {
@@ -182,3 +183,4 @@ public class SQLCipherTest : DBTestHarness
 		Assert.Throws<ArgumentException>(() => { Database.ReKey(key); });
 	}
 }
+#endif

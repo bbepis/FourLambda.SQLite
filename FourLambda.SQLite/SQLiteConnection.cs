@@ -165,6 +165,7 @@ public class SQLiteConnection : IDisposable
 		BusyTimeout = TimeSpan.FromSeconds(1.0);
 		Tracer = line => Debug.WriteLine(line);
 
+#if EncryptionEnabled
 		try
 		{
 			connectionString.PreKeyAction?.Invoke(this);
@@ -178,13 +179,14 @@ public class SQLiteConnection : IDisposable
 			}
 
 			connectionString.PostKeyAction?.Invoke(this);
-		}
+	}
 		catch
 		{
 			Dispose(false);
 
 			throw;
 		}
+#endif
 	}
 
 	public void SetDebugLogger(Action<string>? logger)
@@ -231,6 +233,7 @@ public class SQLiteConnection : IDisposable
 	}
 
 	#region Encryption
+#if EncryptionEnabled
 
 	/// <summary>
 	/// Sets the key used to encrypt/decrypt the database with "pragma key = ...".
@@ -290,7 +293,8 @@ public class SQLiteConnection : IDisposable
 		ExecuteScalar<string>("pragma rekey = \"x'" + s + "'\"");
 	}
 
-	#endregion
+#endif
+#endregion
 
 	#region Transactions
 
@@ -1928,14 +1932,20 @@ public class SQLiteConnectionString
 	public string DatabasePath { get; }
 
 	/// <summary>
-	/// Specifies the encryption key to use on the database. Can be cast from a string or a byte[].
-	/// </summary>
-	public DatabaseKey Key { get; init; }
-
-	/// <summary>
 	/// Flags controlling how the connection should be opened.
 	/// </summary>
 	public SQLiteOpenFlags OpenFlags { get; init; }
+
+	/// <summary>
+	/// Specifies the Virtual File System to use on the database.
+	/// </summary>
+	public string? VfsName { get; init; }
+
+#if EncryptionEnabled
+	/// <summary>
+	/// Specifies the encryption key to use on the database. Can be cast from a string or a byte[].
+	/// </summary>
+	public DatabaseKey Key { get; init; }
 
 	/// <summary>
 	/// Executes prior to setting key for SQLCipher databases
@@ -1946,11 +1956,6 @@ public class SQLiteConnectionString
 	/// Executes after setting key for SQLCipher databases
 	/// </summary>
 	public Action<SQLiteConnection>? PostKeyAction { get; init; }
-
-	/// <summary>
-	/// Specifies the Virtual File System to use on the database.
-	/// </summary>
-	public string? VfsName { get; init; }
 
 	/// <summary>
 	/// Constructs a new SQLiteConnectionString with all the data needed to open an SQLiteConnection.
@@ -1996,6 +2001,26 @@ public class SQLiteConnectionString
 
 		DatabasePath = databasePath;
 	}
+#else
+	/// <summary>
+	/// Constructs a new SQLiteConnectionString with all the data needed to open an SQLiteConnection.
+	/// </summary>
+	/// <param name="databasePath">
+	/// Specifies the path to the database file.
+	/// </param>
+	/// <param name="openFlags">
+	/// Flags controlling how the connection should be opened.
+	/// </param>
+	/// <param name="key">
+	/// Specifies the encryption key to use on the database. Can be cast from a string or a byte[].
+	/// </param>
+	public SQLiteConnectionString(string databasePath, SQLiteOpenFlags openFlags)
+	{
+		OpenFlags = openFlags;
+
+		DatabasePath = databasePath;
+	}
+#endif
 }
 
 /// <summary>
@@ -2025,6 +2050,7 @@ public enum InsertConflictAction
 	Rollback
 }
 
+#if EncryptionEnabled
 /// <summary>
 /// Represents a key that can be used to encrypt/decrypt a database.
 /// </summary>
@@ -2047,3 +2073,4 @@ public struct DatabaseKey
 	public static implicit operator DatabaseKey(string key) => new(key);
 	public static implicit operator DatabaseKey(byte[] key) => new(key);
 }
+#endif

@@ -53,6 +53,7 @@ public class ReadmeTest : DBTestHarness
 		Assert.AreEqual(3, query.ToList().Count);
 	}
 
+#if EncryptionEnabled
 	[Test]
 	public void Cipher()
 	{
@@ -70,6 +71,7 @@ public class ReadmeTest : DBTestHarness
 
 		using var encryptedDb2 = new SQLiteConnection(options2);
 	}
+#endif
 
 	[Test]
 	public void Manual()
