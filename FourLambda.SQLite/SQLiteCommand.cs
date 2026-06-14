@@ -153,7 +153,7 @@ public class SQLiteCommand(SQLiteConnection conn)
 				if (!ValueConverter.TryGetConverterDefinition(column.ColumnType, out var definition))
 					throw new Exception("Unable to convert column type " + typeof(T));
 
-				fastColumnSetters[i] = definition.StatementSetterGeneric<T>(column);
+				fastColumnSetters[i] = definition.StatementGetterGeneric<T>(column);
 			}
 
 			while (SQLite3Native.Step(statement) == SQLite3Native.Result.Row)
@@ -314,7 +314,7 @@ public class SQLiteCommand(SQLiteConnection conn)
 		{
 			if (SQLite3Native.ColumnCount(statement) < 1)
 			{
-				throw new InvalidOperationException("QueryScalars should return at least one column");
+				throw new InvalidOperationException("Command should return at least one column");
 			}
 			while (SQLite3Native.Step(statement) == SQLite3Native.Result.Row)
 			{
@@ -407,98 +407,93 @@ public class SQLiteCommand(SQLiteConnection conn)
 
 	public override string ToString()
 	{
-		var parts = new string[1 + _bindings.Count];
-		parts[0] = CommandText;
-		var i = 1;
-		foreach (var b in _bindings)
-		{
-			parts[i] = $"  {i - 1}: {b.Value}";
-			i++;
-		}
-		return string.Join(Environment.NewLine, parts);
+		var builder = new StringBuilder(CommandText);
+
+		for (var i = 0; i < _bindings.Count; i++)
+			builder.AppendLine($"  {i - 1}: {_bindings[i].Value}");
+
+		return builder.ToString();
 	}
 }
 
 
+internal interface IPreparedCommand : IDisposable
+{
+	int BindAndExecuteBoxed(object source);
+}
 
 /// <summary>
 /// Since the insert never changed, we only need to prepare once.
 /// </summary>
-class PreparedInsertCommand : IDisposable
+internal class PreparedInsertCommand<TRowObject>(SQLiteConnection connection, string commandText, TableColumn[] columns) : IPreparedCommand
 {
-	bool Initialized;
+	private bool Initialized;
 
-	SQLiteConnection Connection;
+	private SQLiteConnection Connection = connection;
+	private Action<TRowObject, Sqlite3Statement, int>[] converters;
 
-	string CommandText;
+	private Sqlite3Statement Statement;
+	private static readonly Sqlite3Statement NullStatement = 0;
 
-	Sqlite3Statement Statement;
-	static readonly Sqlite3Statement NullStatement = default(Sqlite3Statement);
-
-	public PreparedInsertCommand(SQLiteConnection conn, string commandText)
+	int IPreparedCommand.BindAndExecuteBoxed(object source)
 	{
-		Connection = conn;
-		CommandText = commandText;
+		return BindAndExecute((TRowObject)source);
 	}
 
-	public int ExecuteNonQuery(object[] source)
+	public int BindAndExecute(TRowObject source)
 	{
-		if (Initialized && Statement == NullStatement)
+		lock (this)
 		{
-			throw new ObjectDisposedException(nameof(PreparedInsertCommand));
-		}
+			ObjectDisposedException.ThrowIf(Initialized && Statement == NullStatement, this);
 
-		Connection.Tracer?.Invoke("Executing: " + CommandText);
+			Connection.Tracer?.Invoke("Executing: " + commandText);
 
-		if (!Initialized)
-		{
-			Statement = SQLite3Native.Prepare2(Connection.Handle, CommandText);
-			Initialized = true;
-		}
-
-		//bind the values.
-
-		if (source != null)
-		{
-			for (int i = 0; i < source.Length; i++)
+			if (!Initialized)
 			{
-				SQLiteCommand.BindParameter(Statement, i + 1, source[i]);
+				Statement = SQLite3Native.Prepare2(Connection.Handle, commandText);
+				converters = columns.Select(x => x.GetConverter().StatementSetterGeneric<TRowObject>(x)).ToArray();
+
+				Initialized = true;
+			}
+
+			for (int i = 0; i < converters.Length; i++)
+			{
+				converters[i](source, Statement, i + 1);
+			}
+
+			var result = SQLite3Native.Step(Statement);
+
+			switch (result)
+			{
+				case SQLite3Native.Result.Done:
+				{
+					int rowsAffected = SQLite3Native.Changes(Connection.Handle);
+					SQLite3Native.Reset(Statement);
+					return rowsAffected;
+				}
+				case SQLite3Native.Result.Error:
+				{
+					string msg = SQLite3Native.GetErrmsg(Connection.Handle);
+					SQLite3Native.Reset(Statement);
+					throw new SQLiteException(result, msg);
+				}
+				case SQLite3Native.Result.Constraint when SQLite3Native.ExtendedErrCode(Connection.Handle) == SQLite3Native.ExtendedResult.ConstraintNotNull:
+					SQLite3Native.Reset(Statement);
+					throw new NotNullConstraintViolationException(result, SQLite3Native.GetErrmsg(Connection.Handle), null, null);
+				default:
+					SQLite3Native.Reset(Statement);
+					throw new SQLiteException(result, SQLite3Native.GetErrmsg(Connection.Handle));
 			}
 		}
+	}
 
-		var result = SQLite3Native.Step(Statement);
-
-		if (result == SQLite3Native.Result.Done)
-		{
-			int rowsAffected = SQLite3Native.Changes(Connection.Handle);
-			SQLite3Native.Reset(Statement);
-			return rowsAffected;
-		}
-		else if (result == SQLite3Native.Result.Error)
-		{
-			string msg = SQLite3Native.GetErrmsg(Connection.Handle);
-			SQLite3Native.Reset(Statement);
-			throw new SQLiteException(result, msg);
-		}
-		else if (result == SQLite3Native.Result.Constraint && SQLite3Native.ExtendedErrCode(Connection.Handle) == SQLite3Native.ExtendedResult.ConstraintNotNull)
-		{
-			SQLite3Native.Reset(Statement);
-			throw new NotNullConstraintViolationException(result, SQLite3Native.GetErrmsg(Connection.Handle), null, null);
-		}
-		else
-		{
-			SQLite3Native.Reset(Statement);
-			throw new SQLiteException(result, SQLite3Native.GetErrmsg(Connection.Handle));
-		}
+	public static IPreparedCommand Create(Type type, SQLiteConnection connection, string commandText, TableColumn[] columns)
+	{
+		var commandType = typeof(PreparedInsertCommand<>).MakeGenericType(type);
+		return (IPreparedCommand)Activator.CreateInstance(commandType, connection, commandText, columns)!;
 	}
 
 	public void Dispose()
-	{
-		Dispose(true);
-		GC.SuppressFinalize(this);
-	}
-
-	void Dispose(bool disposing)
 	{
 		var s = Statement;
 		Statement = NullStatement;
@@ -507,10 +502,12 @@ class PreparedInsertCommand : IDisposable
 		{
 			SQLite3Native.Finalize(s);
 		}
+
+		GC.SuppressFinalize(this);
 	}
 
 	~PreparedInsertCommand()
 	{
-		Dispose(false);
+		Dispose();
 	}
 }

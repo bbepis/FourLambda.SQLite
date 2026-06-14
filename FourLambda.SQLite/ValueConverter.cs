@@ -8,10 +8,11 @@ public static class ValueConverter
 	{
 		Func<ColumnDefinition?, SqliteCellType> DetermineCellType { get; }
 
-		object? StatementGetterBoxed(Sqlite3Statement statement, int index, TableColumn? column, SQLite3Native.ColType colType);
-		void StatementSetterBoxed(Sqlite3Statement statement, int index, TableColumn? column, object value);
+		internal object? StatementGetterBoxed(Sqlite3Statement statement, int index, TableColumn? column, SQLite3Native.ColType colType);
+		internal void StatementSetterBoxed(Sqlite3Statement statement, int index, TableColumn? column, object value);
 
-		Action<TRowObject, Sqlite3Statement, int> StatementSetterGeneric<TRowObject>(TableColumn column);
+		internal Action<TRowObject, Sqlite3Statement, int> StatementGetterGeneric<TRowObject>(TableColumn column);
+		internal Action<TRowObject, Sqlite3Statement, int> StatementSetterGeneric<TRowObject>(TableColumn column);
 	}
 
 	public interface IConverterDefinition<T> : IGenericConverterDefinition
@@ -30,12 +31,12 @@ public static class ValueConverter
 		public Func<Sqlite3Statement, int, TableColumn?, SQLite3Native.ColType, T?> StatementGetter { get; init; }
 		public Func<ColumnDefinition?, SqliteCellType> DetermineCellType { get; init; }
 
-		public object? StatementGetterBoxed(Sqlite3Statement statement, int index, TableColumn? column, SQLite3Native.ColType colType)
+		object? IGenericConverterDefinition.StatementGetterBoxed(Sqlite3Statement statement, int index, TableColumn? column, SQLite3Native.ColType colType)
 			=> StatementGetter(statement, index, column, colType);
-		public void StatementSetterBoxed(Sqlite3Statement statement, int index, TableColumn? column, object value)
+		void IGenericConverterDefinition.StatementSetterBoxed(Sqlite3Statement statement, int index, TableColumn? column, object value)
 			=> StatementSetter(statement, index, column, (T)value);
 
-		public Action<TRowObject, Sqlite3Statement, int> StatementSetterGeneric<TRowObject>(TableColumn column)
+		Action<TRowObject, Sqlite3Statement, int> IGenericConverterDefinition.StatementGetterGeneric<TRowObject>(TableColumn column)
 		{
 			var setProperty = (Action<TRowObject, T?>)Delegate.CreateDelegate(
 				typeof(Action<TRowObject, T>),
@@ -50,6 +51,24 @@ public static class ValueConverter
 				{
 					setProperty.Invoke(o, value);
 				}
+			};
+		}
+
+		Action<TRowObject, Sqlite3Statement, int> IGenericConverterDefinition.StatementSetterGeneric<TRowObject>(TableColumn column)
+		{
+			var getProperty = (Func<TRowObject, T?>)Delegate.CreateDelegate(
+				typeof(Func<TRowObject, T?>),
+				null,
+				column.PropertyInfo.GetGetMethod());
+
+			return (o, stmt, i) =>
+			{
+				var value = getProperty(o);
+
+				if (value != null)
+					StatementSetter(stmt, i, column, value);
+				else
+					SQLite3Native.BindNull(stmt, i);
 			};
 		}
 	}
@@ -67,7 +86,7 @@ public static class ValueConverter
 		public void StatementSetterBoxed(Sqlite3Statement statement, int index, TableColumn? column, object value)
 			=> StatementSetter(statement, index, column, (T)value);
 
-		public Action<TRowObject, Sqlite3Statement, int> StatementSetterGeneric<TRowObject>(TableColumn column)
+		public Action<TRowObject, Sqlite3Statement, int> StatementGetterGeneric<TRowObject>(TableColumn column)
 		{
 			var isNullable = column.PropertyInfo.PropertyType.Name == "Nullable`1";
 
@@ -104,21 +123,56 @@ public static class ValueConverter
 				}
 			};
 		}
+
+		Action<TRowObject, Sqlite3Statement, int> IGenericConverterDefinition.StatementSetterGeneric<TRowObject>(TableColumn column)
+		{
+			var isNullable = column.PropertyInfo.PropertyType.Name == "Nullable`1";
+
+			if (isNullable)
+			{
+				var getProperty = (Func<TRowObject, T?>)Delegate.CreateDelegate(
+					typeof(Func<TRowObject, T?>),
+					null,
+					column.PropertyInfo.GetGetMethod());
+
+				return (o, stmt, i) =>
+				{
+					var value = getProperty(o);
+
+					if (value.HasValue)
+						StatementSetter(stmt, i, column, value.Value);
+					else
+						SQLite3Native.BindNull(stmt, i);
+				};
+			}
+			else
+			{
+				var getProperty = (Func<TRowObject, T>)Delegate.CreateDelegate(
+					typeof(Func<TRowObject, T>),
+					null,
+					column.PropertyInfo.GetGetMethod());
+
+				return (o, stmt, i) => StatementSetter(stmt, i, column, getProperty(o));
+			}
+		}
 	}
 
-	public class EnumConverterDefinition<T> : IConverterDefinition<T> where T : struct, Enum
+	internal class EnumConverterDefinition<T> : StructConverterDefinition<T> where T : struct, Enum
 	{
-		public Type ClrType { get; } = typeof(T);
-
 		private static readonly bool CanFastCast = Enum.GetUnderlyingType(typeof(T)) == typeof(int);
 
-		public Action<Sqlite3Statement, int, TableColumn?, T> StatementSetter { get; init; } =
-			static (statement, index, column, value) =>
+		public EnumConverterDefinition()
+		{
+			StatementSetter = static (statement, index, column, value) =>
 			{
 				if (column?.StoreAsText == true)
 				{
 					var stringValue = Enum.GetName(column.ColumnType, value);
 					SQLite3Native.BindText(statement, index, stringValue, -1, -1);
+				}
+				else if (CanFastCast)
+				{
+					SQLite3Native.BindInt(statement, index, Unsafe.As<T, int>(ref value));
 				}
 				else
 				{
@@ -127,8 +181,7 @@ public static class ValueConverter
 				}
 			};
 
-		public Func<Sqlite3Statement, int, TableColumn?, SQLite3Native.ColType, T> StatementGetter { get; init; } =
-			static (statement, index, column, colType) =>
+			StatementGetter = static (statement, index, column, colType) =>
 			{
 				if (colType == SQLite3Native.ColType.Text)
 				{
@@ -141,56 +194,13 @@ public static class ValueConverter
 				return CanFastCast ? Unsafe.As<int, T>(ref rawValue) : (T)Enum.ToObject(typeof(T), rawValue);
 			};
 
-		public Func<ColumnDefinition?, SqliteCellType> DetermineCellType { get; init; }
-			= static column => column?.StoreAsText == true ? SqliteCellType.Text : SqliteCellType.Integer;
-
-		public object? StatementGetterBoxed(Sqlite3Statement statement, int index, TableColumn? column, SQLite3Native.ColType colType)
-			=> StatementGetter(statement, index, column, colType);
-		public void StatementSetterBoxed(Sqlite3Statement statement, int index, TableColumn? column, object value)
-			=> StatementSetter(statement, index, column, (T)value);
-
-		public Action<TRowObject, Sqlite3Statement, int> StatementSetterGeneric<TRowObject>(TableColumn column)
-		{
-			var isNullable = column.PropertyInfo.PropertyType.Name == "Nullable`1";
-
-			if (isNullable)
-			{
-				var setNullableProperty = (Action<TRowObject, T?>)Delegate.CreateDelegate(
-					typeof(Action<TRowObject, T?>),
-					null,
-					column.PropertyInfo.GetSetMethod());
-
-				return (o, stmt, i) => {
-					var colType = SQLite3Native.ColumnType(stmt, i);
-					var value = StatementGetter.Invoke(stmt, i, column, colType);
-
-					if (colType != SQLite3Native.ColType.Null)
-					{
-						setNullableProperty.Invoke(o, value);
-					}
-				};
-			}
-
-			var setProperty = (Action<TRowObject, T>)Delegate.CreateDelegate(
-				typeof(Action<TRowObject, T>),
-				null,
-				column.PropertyInfo.GetSetMethod());
-
-			return (o, stmt, i) => {
-				var colType = SQLite3Native.ColumnType(stmt, i);
-				var value = StatementGetter.Invoke(stmt, i, column, colType);
-
-				if (colType != SQLite3Native.ColType.Null)
-				{
-					setProperty.Invoke(o, value);
-				}
-			};
+			DetermineCellType = static column => column?.StoreAsText == true ? SqliteCellType.Text : SqliteCellType.Integer;
 		}
 	}
 
 	private static readonly Dictionary<Type, IGenericConverterDefinition> ConverterDefinitions = new();
 
-	public static bool TryGetConverterDefinition(Type type, [NotNullWhen(true)] out IGenericConverterDefinition? definition)
+	internal static bool TryGetConverterDefinition(Type type, [NotNullWhen(true)] out IGenericConverterDefinition? definition)
 	{
 		lock (ConverterDefinitions)
 		{
@@ -212,7 +222,7 @@ public static class ValueConverter
 		}
 	}
 
-	public static bool TryGetConverterDefinition<T>([NotNullWhen(true)] out IConverterDefinition<T>? definition)
+	internal static bool TryGetConverterDefinition<T>([NotNullWhen(true)] out IConverterDefinition<T>? definition)
 	{
 		var result = TryGetConverterDefinition(typeof(T), out var generic);
 

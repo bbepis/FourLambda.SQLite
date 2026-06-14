@@ -232,21 +232,15 @@ public sealed class TableColumn
 
 	public object? GetValue(object obj)
 	{
-		object? value = PropertyInfo!.GetValue(obj);
+		return PropertyInfo!.GetValue(obj);
+	}
 
-		if (!StoreAsText || value == null)
-			return value;
+	public ValueConverter.IGenericConverterDefinition GetConverter()
+	{
+		if (!ValueConverter.TryGetConverterDefinition(ColumnType, out var definition))
+			throw new NotSupportedException("Unable to convert type " + ColumnType);
 
-		return value switch
-		{
-			DateTime dateTime => dateTime.ToString(StoreAsTextFormat ?? "O"),
-			TimeSpan timeSpan => timeSpan.ToString(StoreAsTextFormat ?? "c"),
-			DateTimeOffset dateTimeOffset => dateTimeOffset.ToString(StoreAsTextFormat ?? "O"),
-			DateOnly dateOnly => dateOnly.ToString(StoreAsTextFormat ?? "O"),
-			TimeOnly timeOnly => timeOnly.ToString(StoreAsTextFormat ?? "O"),
-			IFormattable formattable => formattable.ToString(StoreAsTextFormat, null),
-			_ => value
-		};
+		return definition;
 	}
 
 	internal string GetCreationSql()

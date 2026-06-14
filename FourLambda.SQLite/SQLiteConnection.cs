@@ -1346,7 +1346,7 @@ public class SQLiteConnection : IDisposable
 	/// auto incremented primary key if it has one).
 	/// The return value is the number of rows added to the table.
 	/// </summary>
-	/// <param name="obj">
+	/// <param name="item">
 	/// The object to insert.
 	/// </param>
 	/// <param name="extra">
@@ -1360,29 +1360,28 @@ public class SQLiteConnection : IDisposable
 	/// </returns>
 	public int Insert<
 		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
-		T>(TableMapping map, T obj, InsertConflictAction conflictAction = InsertConflictAction.Abort)
+		T>(TableMapping map, T item, InsertConflictAction conflictAction = InsertConflictAction.Abort)
 	{
-		if (obj == null || map == null)
+		if (item == null || map == null)
 		{
 			return 0;
 		}
 
+		if (map.MappedType == null)
+			throw new ArgumentException("TableMappings without a backed entity type are not supported for insertions", nameof(map));
+
+		if (typeof(T) != map.MappedType)
+			throw new ArgumentException("Items to be inserted must match the entity type defined in the table mapping", nameof(item));
+
 		if (map.PrimaryKeyColumns.Length == 1 && map.PrimaryKeyColumns[0].IsAutoGuid)
 		{
-			if (map.PrimaryKeyColumns[0].GetValue(obj).Equals(Guid.Empty))
+			if (map.PrimaryKeyColumns[0].GetValue(item).Equals(Guid.Empty))
 			{
-				map.PrimaryKeyColumns[0].SetValue(obj, Guid.NewGuid());
+				map.PrimaryKeyColumns[0].SetValue(item, Guid.NewGuid());
 			}
 		}
 		
-		var cols = conflictAction == InsertConflictAction.Replace ? map.InsertOrReplaceColumns : map.InsertColumns;
-		var vals = new object[cols.Length];
-		for (var i = 0; i < vals.Length; i++)
-		{
-			vals[i] = cols[i].GetValue(obj);
-		}
-
-		var insertCmd = GetInsertCommand(map, conflictAction);
+		var insertCmd = (PreparedInsertCommand<T>)GetInsertCommand(map, conflictAction);
 		int count;
 
 		lock (insertCmd)
@@ -1391,13 +1390,13 @@ public class SQLiteConnection : IDisposable
 			// A SQLite prepared statement can be bound for only one operation at a time.
 			try
 			{
-				count = insertCmd.ExecuteNonQuery(vals);
+				count = insertCmd.BindAndExecute(item);
 			}
 			catch (SQLiteException ex)
 			{
 				if (SQLite3Native.ExtendedErrCode(Handle) == SQLite3Native.ExtendedResult.ConstraintNotNull)
 				{
-					throw new NotNullConstraintViolationException(ex.Result, ex.Message, map, obj);
+					throw new NotNullConstraintViolationException(ex.Result, ex.Message, map, item);
 				}
 				throw;
 			}
@@ -1405,7 +1404,7 @@ public class SQLiteConnection : IDisposable
 			if (map.HasAutoIncPK)
 			{
 				var id = SQLite3Native.LastInsertRowid(Handle);
-				map.SetAutoIncPK(obj, id);
+				map.SetAutoIncPK(item, id);
 			}
 		}
 
@@ -1454,9 +1453,10 @@ public class SQLiteConnection : IDisposable
 		InsertConflictAction conflictAction = InsertConflictAction.Abort,
 		bool runInTransaction = true)
 	{
-		var insertCommand = GetInsertCommand(map, conflictAction);
-		var cols = conflictAction == InsertConflictAction.Replace ? map.InsertOrReplaceColumns : map.InsertColumns;
-		var vals = new object[cols.Length];
+		if (typeof(T) != map.MappedType)
+			throw new ArgumentException("Items to be inserted must match the entity type defined in the table mapping", nameof(objects));
+
+		var insertCmd = (PreparedInsertCommand<T>)GetInsertCommand(map, conflictAction);
 
 		int InnerLoop()
 		{
@@ -1464,12 +1464,7 @@ public class SQLiteConnection : IDisposable
 
 			foreach (var obj in objects)
 			{
-				for (var i = 0; i < vals.Length; i++)
-				{
-					vals[i] = cols[i].GetValue(obj);
-				}
-
-				count += insertCommand.ExecuteNonQuery(vals);
+				count += insertCmd.BindAndExecute(obj);
 				map.SetAutoIncPK(obj, SQLite3Native.LastInsertRowid(Handle));
 			}
 
@@ -1492,11 +1487,11 @@ public class SQLiteConnection : IDisposable
 		return InnerLoop();
 	}
 
-	readonly Dictionary<Tuple<TableMapping, InsertConflictAction>, PreparedInsertCommand> _insertCommandMap = new Dictionary<Tuple<TableMapping, InsertConflictAction>, PreparedInsertCommand>();
+	readonly Dictionary<Tuple<TableMapping, InsertConflictAction>, IPreparedCommand> _insertCommandMap = new();
 
-	PreparedInsertCommand GetInsertCommand(TableMapping map, InsertConflictAction conflictAction)
+	IPreparedCommand GetInsertCommand(TableMapping map, InsertConflictAction conflictAction)
 	{
-		PreparedInsertCommand prepCmd;
+		IPreparedCommand prepCmd;
 
 		// TODO: this feels like a ticking timebomb. if someone migrates or changes a mapping, this dictionary is going to be out of date yet still used
 		var key = Tuple.Create(map, conflictAction);
@@ -1525,8 +1520,13 @@ public class SQLiteConnection : IDisposable
 		return prepCmd;
 	}
 
-	PreparedInsertCommand CreateInsertCommand(TableMapping map, InsertConflictAction conflictAction)
+	IPreparedCommand CreateInsertCommand(TableMapping map, InsertConflictAction conflictAction)
 	{
+		if (map.MappedType == null)
+		{
+			throw new ArgumentException("TableMappings without a backed entity type are not supported for insertions", nameof(map));
+		}
+
 		var cols = map.InsertColumns;
 		string insertSql;
 
@@ -1557,7 +1557,7 @@ public class SQLiteConnection : IDisposable
 			insertSql = $"INSERT{orAction} INTO \"{map.TableName}\"({columnNames})VALUES({valueSlots})";
 		}
 
-		var insertCommand = new PreparedInsertCommand(this, insertSql);
+		var insertCommand = PreparedInsertCommand<object>.Create(map.MappedType, this, insertSql, cols);
 		return insertCommand;
 	}
 
