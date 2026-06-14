@@ -1,4 +1,6 @@
-﻿namespace FourLambda.SQLite.Tests;
+﻿using System.Diagnostics.CodeAnalysis;
+
+namespace FourLambda.SQLite.Tests;
 
 [TestFixture]
 public class GuidTests : DBTestHarness
@@ -9,6 +11,8 @@ public class GuidTests : DBTestHarness
 		public Guid Id { get; set; }
 		public string Text { get; set; }
 
+
+		[ExcludeFromCodeCoverage]
 		public override string ToString() => $"[TestObj: Id={Id}, Text={Text}]";
 	}
 

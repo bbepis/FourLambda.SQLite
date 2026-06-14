@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace FourLambda.SQLite.Tests;
 
 [TestFixture]
@@ -10,6 +12,8 @@ public class TransactionTest : DBTestHarness
 		[AutoIncrement, PrimaryKey]
 		public int Id { get; set; }
 
+
+		[ExcludeFromCodeCoverage]
 		public override string ToString() => $"[TestObj: Id={Id}]";
 	}
 

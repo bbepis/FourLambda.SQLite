@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 
 namespace FourLambda.SQLite.Tests;
 
@@ -13,6 +14,7 @@ public class BooleanTest
 		public bool Flag { get; set; }
 		public string Text { get; set; }
 
+		[ExcludeFromCodeCoverage]
 		public override string ToString() => $"VO:: ID:{ID} Flag:{Flag} Text:{Text}";
 	}
 

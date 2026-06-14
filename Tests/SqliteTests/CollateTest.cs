@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace FourLambda.SQLite.Tests;
 
 [TestFixture]
@@ -19,7 +21,9 @@ public class CollateTest : DBTestHarness
 		[Collation("NOCASE")]
 		public string CollateNoCase { get; set; }
 
-		public override string ToString () => $"[TestObj: Id={Id}]";
+
+		[ExcludeFromCodeCoverage]
+		public override string ToString() => $"[TestObj: Id={Id}]";
 	}
 
 	protected override void InitializeDatabase()

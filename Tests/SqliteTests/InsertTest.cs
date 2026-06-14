@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 
 namespace FourLambda.SQLite.Tests;
 
@@ -11,7 +12,9 @@ public class InsertTest : DBTestHarness
 		public int Id { get; set; }
 		public string Text { get; set; }
 
-		public override string ToString () => $"[TestObj: Id={Id}, Text={Text}]";
+
+		[ExcludeFromCodeCoverage]
+		public override string ToString() => $"[TestObj: Id={Id}, Text={Text}]";
 	}
 
 	public class TestObj2
@@ -20,6 +23,8 @@ public class InsertTest : DBTestHarness
 		public int Id { get; set; }
 		public string Text { get; set; }
 
+
+		[ExcludeFromCodeCoverage]
 		public override string ToString() => $"[TestObj: Id={Id}, Text={Text}]";
 	}
 

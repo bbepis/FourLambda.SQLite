@@ -1,4 +1,6 @@
-﻿namespace FourLambda.SQLite.Tests;
+﻿using System.Diagnostics.CodeAnalysis;
+
+namespace FourLambda.SQLite.Tests;
 
 [TestFixture]
 public class NullableTest : DBTestHarness
@@ -239,6 +241,8 @@ public class NullableTest : DBTestHarness
 
 		public override int GetHashCode() => HashCode.Combine(ID, NullableIntEnum, NullableTextEnum);
 
+
+		[ExcludeFromCodeCoverage]
 		public override string ToString()
 			=> $"[NullableEnumClass: ID={ID}, NullableIntEnum={NullableIntEnum}, NullableTextEnum={NullableTextEnum}]";
 	}

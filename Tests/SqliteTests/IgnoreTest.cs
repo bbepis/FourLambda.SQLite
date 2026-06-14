@@ -1,4 +1,6 @@
-﻿namespace FourLambda.SQLite.Tests;
+﻿using System.Diagnostics.CodeAnalysis;
+
+namespace FourLambda.SQLite.Tests;
 
 [TestFixture]
 public class IgnoreTest : DBTestHarness
@@ -22,6 +24,8 @@ public class IgnoreTest : DBTestHarness
 		[Ignore]
 		public string IgnoredText { get; set; }
 
+
+		[ExcludeFromCodeCoverage]
 		public override string ToString() => $"[TestObj: Id={Id}]";
 	}
 

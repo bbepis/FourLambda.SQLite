@@ -1,4 +1,6 @@
-﻿namespace FourLambda.SQLite.Tests;
+﻿using System.Diagnostics.CodeAnalysis;
+
+namespace FourLambda.SQLite.Tests;
 
 [TestFixture]
 public class EnumTests : DBTestHarness
@@ -17,6 +19,9 @@ public class EnumTests : DBTestHarness
 
 		public TestEnum Value { get; set; }
 
+
+		[ExcludeFromCodeCoverage]
+
 		public override string ToString() => $"[TestObj: Id={Id}, Value={Value}]";
 	}
 
@@ -27,6 +32,9 @@ public class EnumTests : DBTestHarness
 
 		[StoreAsText]
 		public TestEnum Value { get; set; }
+
+
+		[ExcludeFromCodeCoverage]
 
 		public override string ToString() => $"[StringTestObj: Id={Id}, Value={Value}]";
 	}
@@ -92,7 +100,10 @@ public class EnumTests : DBTestHarness
 
 		public ByteTestEnum Value { get; set; }
 
-		public override string ToString () => $"[ByteTestObj: Id={Id}, Value={Value}]";
+
+		[ExcludeFromCodeCoverage]
+
+		public override string ToString() => $"[ByteTestObj: Id={Id}, Value={Value}]";
 	}
 
 	[Test]

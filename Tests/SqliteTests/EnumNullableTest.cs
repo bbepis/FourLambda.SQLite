@@ -1,4 +1,6 @@
-﻿namespace FourLambda.SQLite.Tests;
+﻿using System.Diagnostics.CodeAnalysis;
+
+namespace FourLambda.SQLite.Tests;
 
 [TestFixture]
 public class EnumNullableTests : DBTestHarness
@@ -16,6 +18,9 @@ public class EnumNullableTests : DBTestHarness
 		public int Id { get; set; }
 
 		public TestEnum? Value { get; set; }
+
+
+		[ExcludeFromCodeCoverage]
 
 		public override string ToString() => $"[TestObj: Id={Id}, Value={Value}]";
 	}

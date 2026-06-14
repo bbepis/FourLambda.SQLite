@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace FourLambda.SQLite.Tests;
 
 [TestFixture]
@@ -9,6 +11,8 @@ public class SkipTest : DBTestHarness
 		public int Id { get; set; }
 		public int Order { get; set; }
 
+
+		[ExcludeFromCodeCoverage]
 		public override string ToString () => $"[TestObj: Id={Id}, Order={Order}]";
 	}
 

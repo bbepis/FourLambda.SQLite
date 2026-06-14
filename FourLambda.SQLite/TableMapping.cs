@@ -530,7 +530,7 @@ public class ColumnDefinition
 		PrimaryKeyPosition = propertyInfo.GetCustomAttribute<PrimaryKeyAttribute>()?.Order;
 
 		var implicitPk = createFlags.HasFlag(TableCreateFlags.ImplicitPK)
-		                 && string.Equals(propertyInfo.Name, Orm.ImplicitPkName, StringComparison.OrdinalIgnoreCase);
+		                 && string.Equals(propertyInfo.Name, "ID", StringComparison.OrdinalIgnoreCase);
 
 		if (!PrimaryKeyPosition.HasValue && implicitPk)
 			PrimaryKeyPosition = 0;
@@ -630,21 +630,5 @@ public class ColumnDefinition
 			throw new NotSupportedException("Unable to handle column type " + ColumnType);
 
 		return definition!.DetermineCellType(this);
-	}
-}
-
-public static class Orm
-{
-	public const string ImplicitPkName = "Id";
-
-	public static Type GetType(object? obj)
-	{
-		if (obj == null)
-			return typeof(object);
-
-		if (obj is IReflectableType rt)
-			return rt.GetTypeInfo().AsType();
-
-		return obj.GetType();
 	}
 }

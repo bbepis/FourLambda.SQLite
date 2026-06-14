@@ -1724,16 +1724,16 @@ public class SQLiteConnection : IDisposable
 	/// <summary>
 	/// Deletes the given object from the database using its primary key.
 	/// </summary>
-	/// <param name="objectToDelete">
+	/// <param name="item">
 	/// The object to delete. It must have a primary key designated using the PrimaryKeyAttribute.
 	/// </param>
 	/// <returns>
 	/// The number of rows deleted.
 	/// </returns>
 	[RequiresUnreferencedCode("This method requires ''DynamicallyAccessedMemberTypes.All' on the runtime type of 'objectToDelete'.")]
-	public int Delete(object objectToDelete)
+	public int Delete(object item)
 	{
-		var map = GetMapping(Orm.GetType(objectToDelete));
+		var map = GetMapping(item.GetType());
 
 		if (map.PrimaryKeyColumns.Length == 0)
 		{
@@ -1742,7 +1742,7 @@ public class SQLiteConnection : IDisposable
 
 		var q = $"delete from \"{map.TableName}\" {map.PKWhereSql}";
 
-		var count = Execute(q, map.PrimaryKeyColumns.Select(x => x.GetValue(objectToDelete)).ToArray());
+		var count = Execute(q, map.PrimaryKeyColumns.Select(x => x.GetValue(item)).ToArray());
 
 		return count;
 	}
@@ -1833,7 +1833,7 @@ public class SQLiteConnection : IDisposable
 	/// </summary>
 	/// <param name="destinationDatabasePath">Path to backup file.</param>
 	/// <param name="databaseName">The name of the database to backup (usually "main").</param>
-	public void Backup(string destinationDatabasePath, string databaseName = "main")
+	public void Backup(string destinationDatabasePath, string databaseName)
 	{
 		// Open the destination
 		var r = SQLite3Native.Open(destinationDatabasePath, out var destHandle);

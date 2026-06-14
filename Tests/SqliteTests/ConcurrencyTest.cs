@@ -1,9 +1,11 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace FourLambda.SQLite.Tests;
 
 [TestFixture, NUnit.Framework.Ignore("These unit tests were disabled in the upstream repo, so I'm assuming they're incomplete")]
+[ExcludeFromCodeCoverage]
 public class ConcurrencyTest : DBTestHarness
 {
 	public class TestObj
@@ -11,6 +13,7 @@ public class ConcurrencyTest : DBTestHarness
 		[AutoIncrement, PrimaryKey]
 		public int Id { get; set; }
 
+		[ExcludeFromCodeCoverage]
 		public override string ToString() => $"[TestObj: Id={Id}]";
 	}
 

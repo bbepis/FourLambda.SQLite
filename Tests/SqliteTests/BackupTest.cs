@@ -13,7 +13,7 @@ public class BackupTest : DBTestHarness
 		var lines = Database.Table<OrderLine>().ToList();
 		Assert.AreEqual(1, lines.Count);
 
-		Database.Backup(pathDest);
+		Database.Backup(pathDest, "main");
 
 		var destLen = new FileInfo(pathDest).Length;
 		Assert.True(destLen >= 4096);

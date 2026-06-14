@@ -1,5 +1,3 @@
-using System.Xml.Linq;
-
 namespace FourLambda.SQLite;
 
 public class SQLiteCommand(SQLiteConnection conn)
