@@ -12,17 +12,32 @@ public class EnumTests : DBTestHarness
 		Value3
 	}
 
+	public enum TestLongEnum : long
+	{
+		Value1,
+		Value2,
+		Value3
+	}
+
+	public enum TestByteEnum : byte
+	{
+		Value1,
+		Value2,
+		Value3
+	}
+
 	public class TestObj
 	{
 		[PrimaryKey]
 		public int Id { get; set; }
 
-		public TestEnum Value { get; set; }
+		public TestEnum EnumValue { get; set; }
+		public TestLongEnum LongEnumValue { get; set; }
+		public TestByteEnum ByteEnumValue { get; set; }
 
 
 		[ExcludeFromCodeCoverage]
-
-		public override string ToString() => $"[TestObj: Id={Id}, Value={Value}]";
+		public override string ToString() => $"[TestObj: {nameof(Id)}={Id}, {nameof(EnumValue)}={EnumValue}, {nameof(LongEnumValue)}={LongEnumValue}, {nameof(ByteEnumValue)}={ByteEnumValue}]";
 	}
 
 	public class StringTestObj
@@ -31,98 +46,74 @@ public class EnumTests : DBTestHarness
 		public int Id { get; set; }
 
 		[StoreAsText]
-		public TestEnum Value { get; set; }
+		public TestEnum EnumValue { get; set; }
+
+		[StoreAsText]
+		public TestLongEnum LongEnumValue { get; set; }
+
+		[StoreAsText]
+		public TestByteEnum ByteEnumValue { get; set; }
 
 
 		[ExcludeFromCodeCoverage]
-
-		public override string ToString() => $"[StringTestObj: Id={Id}, Value={Value}]";
+		public override string ToString() => $"[TestObj: {nameof(Id)}={Id}, {nameof(EnumValue)}={EnumValue}, {nameof(LongEnumValue)}={LongEnumValue}, {nameof(ByteEnumValue)}={ByteEnumValue}]";
 	}
 
 	protected override void InitializeDatabase()
 	{
 		Database.CreateTable<TestObj>();
 		Database.CreateTable<StringTestObj>();
-		Database.CreateTable<ByteTestObj>();
 	}
 
 	[Test]
 	public void ShouldPersistAndReadEnum()
 	{
-		var obj1 = new TestObj { Id = 1, Value = TestEnum.Value2 };
-		var obj2 = new TestObj { Id = 2, Value = TestEnum.Value3 };
+		var testObjects = new[]
+		{
+			new TestObj { Id = 1, EnumValue = TestEnum.Value2, LongEnumValue = TestLongEnum.Value2, ByteEnumValue = TestByteEnum.Value3 },
+			new TestObj { Id = 2, EnumValue = TestEnum.Value3, LongEnumValue = TestLongEnum.Value2, ByteEnumValue = TestByteEnum.Value3 },
+		};
 
-		var numIn1 = Database.Insert(obj1);
-		var numIn2 = Database.Insert(obj2);
-		Assert.AreEqual(1, numIn1);
-		Assert.AreEqual(1, numIn2);
+		foreach (var item in testObjects)
+			Assert.AreEqual(1, Database.Insert(item));
 
-		var result = Database.Query<TestObj>("select * from TestObj").ToList();
-		Assert.AreEqual(2, result.Count);
-		Assert.AreEqual(obj1.Value, result[0].Value);
-		Assert.AreEqual(obj2.Value, result[1].Value);
+		var result = Database.Table<TestObj>().ToList();
+		Assert.AreEqual(2, testObjects.Length);
 
-		Assert.AreEqual(obj1.Id, result[0].Id);
-		Assert.AreEqual(obj2.Id, result[1].Id);
+		for (var i = 0; i < testObjects.Length; i++)
+		{
+			var item = testObjects[i];
+
+			Assert.AreEqual(item.Id, result[i].Id);
+			Assert.AreEqual(item.EnumValue, result[i].EnumValue);
+			Assert.AreEqual(item.LongEnumValue, result[i].LongEnumValue);
+			Assert.AreEqual(item.ByteEnumValue, result[i].ByteEnumValue);
+		}
 	}
 
 	[Test]
 	public void ShouldPersistAndReadStringEnum()
 	{
-		var obj1 = new StringTestObj { Id = 1, Value = TestEnum.Value2 };
-		var obj2 = new StringTestObj { Id = 2, Value = TestEnum.Value3 };
+		var testObjects = new[]
+		{
+			new TestObj { Id = 1, EnumValue = TestEnum.Value2, LongEnumValue = TestLongEnum.Value2, ByteEnumValue = TestByteEnum.Value3 },
+			new TestObj { Id = 2, EnumValue = TestEnum.Value3, LongEnumValue = TestLongEnum.Value2, ByteEnumValue = TestByteEnum.Value3 },
+		};
 
-		var numIn1 = Database.Insert(obj1);
-		var numIn2 = Database.Insert(obj2);
-		Assert.AreEqual(1, numIn1);
-		Assert.AreEqual(1, numIn2);
+		foreach (var item in testObjects)
+			Assert.AreEqual(1, Database.Insert(item));
 
-		var result = Database.Query<StringTestObj>("select * from StringTestObj").ToList();
-		Assert.AreEqual(2, result.Count);
-		Assert.AreEqual(obj1.Value, result[0].Value);
-		Assert.AreEqual(obj2.Value, result[1].Value);
+		var result = Database.Table<TestObj>().ToList();
+		Assert.AreEqual(2, testObjects.Length);
 
-		Assert.AreEqual(obj1.Id, result[0].Id);
-		Assert.AreEqual(obj2.Id, result[1].Id);
-	}
+		for (var i = 0; i < testObjects.Length; i++)
+		{
+			var item = testObjects[i];
 
-	public enum ByteTestEnum : byte
-	{
-		Value1 = 1,
-		Value2 = 2,
-		Value3 = 3
-	}
-
-	public class ByteTestObj
-	{
-		[PrimaryKey]
-		public int Id { get; set; }
-
-		public ByteTestEnum Value { get; set; }
-
-
-		[ExcludeFromCodeCoverage]
-
-		public override string ToString() => $"[ByteTestObj: Id={Id}, Value={Value}]";
-	}
-
-	[Test]
-	public void Issue33_ShouldPersistAndReadByteEnum()
-	{
-		var obj1 = new ByteTestObj { Id = 1, Value = ByteTestEnum.Value2 };
-		var obj2 = new ByteTestObj { Id = 2, Value = ByteTestEnum.Value3 };
-
-		var numIn1 = Database.Insert(obj1);
-		var numIn2 = Database.Insert(obj2);
-		Assert.AreEqual(1, numIn1);
-		Assert.AreEqual(1, numIn2);
-
-		var result = Database.Query<ByteTestObj>("select * from ByteTestObj order by Id").ToList();
-		Assert.AreEqual(2, result.Count);
-		Assert.AreEqual(obj1.Value, result[0].Value);
-		Assert.AreEqual(obj2.Value, result[1].Value);
-
-		Assert.AreEqual(obj1.Id, result[0].Id);
-		Assert.AreEqual(obj2.Id, result[1].Id);
+			Assert.AreEqual(item.Id, result[i].Id);
+			Assert.AreEqual(item.EnumValue, result[i].EnumValue);
+			Assert.AreEqual(item.LongEnumValue, result[i].LongEnumValue);
+			Assert.AreEqual(item.ByteEnumValue, result[i].ByteEnumValue);
+		}
 	}
 }
