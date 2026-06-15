@@ -163,7 +163,6 @@ public class SQLiteConnection : IDisposable
 		_open = true;
 
 		BusyTimeout = TimeSpan.FromSeconds(1.0);
-		Tracer = line => Debug.WriteLine(line);
 
 #if EncryptionEnabled
 		try
