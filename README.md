@@ -21,6 +21,12 @@
   </p>
 </div>
 
+<style>
+    table {
+        width: 100%;
+    }
+</style>
+
 
 ## Overview
 
@@ -49,11 +55,38 @@ This fork also includes a lot of added features and fixed issues:
 - Complete rework of public API, with much of the old confusing and redundant API surface unified
 - Much needed modernization, refactoring, performance improvements and TLC for the codebase.
 
+## Benchmarks
+
+Here are some benchmarks compared to the upstream sqlite-net fork and the standard Microsoft.Data.Sqlite.Core package:
+
+### Writing
+
+Stats for bulk inserting 500,000 rows:
+
+| Library        |         Time |            Ratio | Allocated (MB) |     Allocated Ratio |
+| -------------- | -----------: | ---------------: | -------------: | ------------------: |
+| **FourLambda** | **321.8 ms** | **1.90x faster** |    **0.02 MB** | **11,620.17x less** |
+| SQLitePCL      |     612.3 ms | 1.00x (baseline) |      261.99 MB |    1.00x (baseline) |
+| Microsoft      |   1,359.4 ms |     2.23x slower |      676.06 MB |          2.58x more |
+
+### Reading
+
+Stats for pulling 500,000 rows using different methods:
+
+| Library        |                                Method |          Time |            Ratio | Allocated (MB) |      Alloc Ratio |
+| -------------- | ------------------------------------- | ------------: | ---------------: | -------------: |   -------------: |
+| **FourLambda** | **Query (into value tuple)**          | **199.24 ms** | **1.94x faster** |   **43.24 MB** |   **3.00x less** |
+| **FourLambda** | **DataReader**                        | **208.00 ms** | **1.87x faster** |   **43.24 MB** |   **3.00x less** |
+| **FourLambda** | **Query (into object)**               | **210.51 ms** | **1.84x faster** |   **82.30 MB** |   **1.57x less** |
+| SQLitePCL      | DeferredQuery (into object)           |     387.17 ms | 1.00x (baseline) |      129.18 MB | 1.00x (baseline) |
+| Microsoft      | DataReader                            |     399.55 ms |     1.03x slower |       43.25 MB |       3.00x less |
+| SQLitePCL      | DeferredQuery (into value tuple)      |     451.84 ms |     1.17x slower |      176.06 MB |       1.36x more |
+
 ## Breaking Changes
 
 As compared to the upstream `sqlite-pcl` package:
 
-- SQLiteAsyncConnection / asynchronous versions of methods have been removed. If you want to asynchronously await database calls, wrap them in `await Task.Run(() => { ... })`. It's [what the original implementation does](https://github.com/praeclarum/sqlite-net/blob/master/src/SQLiteAsync.cs#L478-L515) under the hood
+- SQLiteAsyncConnection / asynchronous versions of methods have been removed. If you want to asynchronously await database calls, wrap them in `await Task.Run(() => { ... })`. It's basically [what the original implementation does](https://github.com/praeclarum/sqlite-net/blob/master/src/SQLiteAsync.cs#L478-L515) under the hood
 - Many compiler directives relating to UWP/alternative/older platforms have been removed. .NET 8 and .NET 10 are the main targets for this project
 - Implicit index creation is not supported (e.g. using `CreateFlags.ImplicitIndex` or ending property names in `Id`). Manually mark your properties you wish to have indexed with `[Index]`
 - `[StoreAsText]` can't be applied to `enum` declarations anymore. Instead, apply them to each property column you wish to have converted
