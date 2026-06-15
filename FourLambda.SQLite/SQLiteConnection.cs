@@ -1119,6 +1119,21 @@ public class SQLiteConnection : IDisposable
 		return rows;
 	}
 
+	/// <summary>
+	/// Returns a <see cref="SQLiteDataReader"/> given the command text (SQL) with arguments. Place a '?' in the command text for each of the arguments sequentially.
+	/// </summary>
+	/// <param name="query">
+	/// The fully escaped SQL.
+	/// </param>
+	/// <param name="args">
+	/// Arguments to substitute for the occurrences of '?' in the query.
+	/// </param>
+	public SQLiteDataReader ExecuteReader(string query, params object[] args)
+	{
+		var cmd = CreateCommand(query, args);
+		return cmd.ExecuteReader();
+	}
+
 	#endregion
 
 	#region Query

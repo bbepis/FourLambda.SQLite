@@ -37,6 +37,15 @@ public class SQLiteCommand(SQLiteConnection conn)
 		}
 	}
 
+	/// <summary>
+	/// Executes a query SQL statement (SELECT) and returns a data reader.
+	/// </summary>
+	public SQLiteDataReader ExecuteReader()
+	{
+		conn.Tracer?.Invoke("Executing: " + this);
+
+		return new SQLiteDataReader(Prepare());
+	}
 	public T? ExecuteScalar<T>()
 	{
 		conn.Tracer?.Invoke("Executing Query: " + this);
