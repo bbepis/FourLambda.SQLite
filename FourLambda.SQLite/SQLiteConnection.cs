@@ -1135,6 +1135,34 @@ public class SQLiteConnection : IDisposable
 	/// - A <see cref="ValueTuple"/> with up to 7 arguments. Note that the values are loaded positionally and not by name; make sure the positions of the values match up with the statement.<br/>
 	/// - A scalar type (e.g. string, int). The value in the first column is parsed as this scalar type and returned.
 	/// </typeparam>
+	/// <returns>
+	/// An enumerable with one result for each row returned by the query.
+	/// The enumerator (retrieved by calling GetEnumerator() on the result of this method)
+	/// will call sqlite3_step on each call to MoveNext, so the database
+	/// connection must remain open for the lifetime of the enumerator.
+	/// </returns>
+	public IEnumerable<T> Query<
+		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
+		T>()
+	{
+		// TODO: escape all usages of table name
+		var map = GetMapping<T>();
+		var cmd = CreateCommand($"SELECT * FROM \"{map.TableName}\"");
+		return cmd.ExecuteQuery<T>();
+	}
+
+	/// <summary>
+	/// Creates a SQLiteCommand given the command text (SQL) with arguments. Place a '?'
+	/// in the command text for each of the arguments and then executes that command.
+	/// It returns each row of the result using the mapping automatically generated for
+	/// the given type.
+	/// </summary>
+	/// <typeparam name="T">
+	///	The type to load data into. This can be of three category of types:<br/>
+	/// - A regular class/struct that contains column definitions as properties.<br/>
+	/// - A <see cref="ValueTuple"/> with up to 7 arguments. Note that the values are loaded positionally and not by name; make sure the positions of the values match up with the statement.<br/>
+	/// - A scalar type (e.g. string, int). The value in the first column is parsed as this scalar type and returned.
+	/// </typeparam>
 	/// <param name="query">
 	/// The fully escaped SQL.
 	/// </param>
