@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+
 namespace FourLambda.SQLite;
 
 public class SQLiteCommand(SQLiteConnection conn)
@@ -146,7 +148,7 @@ public class SQLiteCommand(SQLiteConnection conn)
 		try
 		{
 			var cols = new TableColumn?[SQLite3Native.ColumnCount(statement)];
-			var fastColumnSetters = new Action<T, Sqlite3Statement, int>[SQLite3Native.ColumnCount(statement)];
+			var fastColumnSetters = new ValueConverter.DirectStatementAccessorDelegate<T>[SQLite3Native.ColumnCount(statement)];
 
 			for (int i = 0; i < cols.Length; i++)
 			{
@@ -160,7 +162,7 @@ public class SQLiteCommand(SQLiteConnection conn)
 				if (!ValueConverter.TryGetConverterDefinition(column.ColumnType, out var definition))
 					throw new Exception("Unable to convert column type " + typeof(T));
 
-				fastColumnSetters[i] = definition.StatementGetterGeneric<T>(column);
+				fastColumnSetters[i] = definition.DirectStatementGetter<T>(column);
 			}
 
 			while (SQLite3Native.Step(statement) == SQLite3Native.Result.Row)
@@ -172,7 +174,7 @@ public class SQLiteCommand(SQLiteConnection conn)
 					if (cols[i] == null)
 						continue;
 
-					fastColumnSetters[i].Invoke(obj, statement, i);
+					fastColumnSetters[i].Invoke(ref obj, statement, i);
 				}
 
 				yield return obj;
@@ -280,6 +282,7 @@ public class SQLiteCommand(SQLiteConnection conn)
 		try
 		{
 			var converters = new ValueConverter.IGenericConverterDefinition[SQLite3Native.ColumnCount(statement)];
+			var delegates = new ValueConverter.DirectStatementAccessorDelegate<T>[SQLite3Native.ColumnCount(statement)];
 
 			// unfortunately, we can't try and match column names to value tuple fields
 			// https://stackoverflow.com/a/46602134
@@ -290,20 +293,39 @@ public class SQLiteCommand(SQLiteConnection conn)
 					throw new Exception("Unable to convert column type " + typeof(T));
 
 				converters[i] = definition;
+
+				if (RuntimeFeature.IsDynamicCodeSupported)
+					delegates[i] = definition.DirectStatementGetter<T>(fields[i]);
 			}
 
-			while (SQLite3Native.Step(statement) == SQLite3Native.Result.Row)
+			if (RuntimeFeature.IsDynamicCodeSupported)
 			{
-				// needs to be boxed. only way we can fix this is by not using reflection here
-				var obj = (object)Activator.CreateInstance<T>();
-
-				for (int i = 0; i < fields.Length; i++)
+				while (SQLite3Native.Step(statement) == SQLite3Native.Result.Row)
 				{
-					var colType = SQLite3Native.ColumnType(statement, i);
-					fields[i].SetValue(obj, converters[i].StatementGetterBoxed(statement, i, null, colType));
-				}
+					// needs to be boxed. only way we can fix this is by not using reflection here
+					var obj = Activator.CreateInstance<T>();
 
-				yield return (T)obj;
+					for (int i = 0; i < fields.Length; i++)
+						delegates[i].Invoke(ref obj, statement, i);
+
+					yield return obj;
+				}
+			}
+			else
+			{
+				while (SQLite3Native.Step(statement) == SQLite3Native.Result.Row)
+				{
+					// needs to be boxed. only way we can fix this is by not using reflection here
+					var obj = (object)Activator.CreateInstance<T>();
+
+					for (int i = 0; i < fields.Length; i++)
+					{
+						var colType = SQLite3Native.ColumnType(statement, i);
+						fields[i].SetValue(obj, converters[i].StatementGetterBoxed(statement, i, null, colType));
+					}
+
+					yield return (T)obj;
+				}
 			}
 		}
 		finally
@@ -437,7 +459,7 @@ internal class PreparedInsertCommand<TRowObject>(SQLiteConnection connection, st
 	private bool Initialized;
 
 	private SQLiteConnection Connection = connection;
-	private Action<TRowObject, Sqlite3Statement, int>[] converters;
+	private ValueConverter.DirectStatementAccessorDelegate<TRowObject>[] converters;
 
 	private Sqlite3Statement Statement;
 	private static readonly Sqlite3Statement NullStatement = 0;
@@ -458,14 +480,14 @@ internal class PreparedInsertCommand<TRowObject>(SQLiteConnection connection, st
 			if (!Initialized)
 			{
 				Statement = SQLite3Native.Prepare2(Connection.Handle, commandText);
-				converters = columns.Select(x => x.GetConverter().StatementSetterGeneric<TRowObject>(x)).ToArray();
+				converters = columns.Select(x => x.GetConverter().DirectStatementSetter<TRowObject>(x)).ToArray();
 
 				Initialized = true;
 			}
 
 			for (int i = 0; i < converters.Length; i++)
 			{
-				converters[i](source, Statement, i + 1);
+				converters[i](ref source, Statement, i + 1);
 			}
 
 			var result = SQLite3Native.Step(Statement);

@@ -1,9 +1,20 @@
+using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
+using static FourLambda.SQLite.ValueConverter;
 
 namespace FourLambda.SQLite;
 
 public static class ValueConverter
 {
+	public delegate void DirectStatementAccessorDelegate<TRowObject>(ref TRowObject row, Sqlite3Statement statement, int index);
+
+	public delegate SqliteCellType DetermineCellTypeDelegate(ColumnDefinition? column);
+
+	public delegate void StatementSetter<T>(Sqlite3Statement statement, int index, TableColumn? column, T value);
+	public delegate T StatementGetter<T>(Sqlite3Statement statement, int index, TableColumn? column, SQLite3Native.ColType columnType);
+
+	private delegate void ActionRef<TTarget, TValue>(ref TTarget target, TValue value);
+
 	public interface IGenericConverterDefinition
 	{
 		Func<ColumnDefinition?, SqliteCellType> DetermineCellType { get; }
@@ -11,24 +22,25 @@ public static class ValueConverter
 		internal object? StatementGetterBoxed(Sqlite3Statement statement, int index, TableColumn? column, SQLite3Native.ColType colType);
 		internal void StatementSetterBoxed(Sqlite3Statement statement, int index, TableColumn? column, object value);
 
-		internal Action<TRowObject, Sqlite3Statement, int> StatementGetterGeneric<TRowObject>(TableColumn column);
-		internal Action<TRowObject, Sqlite3Statement, int> StatementSetterGeneric<TRowObject>(TableColumn column);
+		internal DirectStatementAccessorDelegate<TRowObject> DirectStatementGetter<TRowObject>(TableColumn column);
+		internal DirectStatementAccessorDelegate<TRowObject> DirectStatementGetter<TRowObject>(FieldInfo fieldInfo);
+		internal DirectStatementAccessorDelegate<TRowObject> DirectStatementSetter<TRowObject>(TableColumn column);
 	}
 
 	public interface IConverterDefinition<T> : IGenericConverterDefinition
 	{
 		public Type ClrType { get; }
 
-		public Action<Sqlite3Statement, int, TableColumn?, T> StatementSetter { get; }
-		public Func<Sqlite3Statement, int, TableColumn?, SQLite3Native.ColType, T?> StatementGetter { get; }
+		public StatementSetter<T> StatementSetter { get; }
+		public StatementGetter<T> StatementGetter { get; }
 	}
 
 	public class ConverterDefinition<T> : IConverterDefinition<T> where T : class
 	{
 		public Type ClrType { get; } = typeof(T);
 
-		public Action<Sqlite3Statement, int, TableColumn?, T> StatementSetter { get; init; }
-		public Func<Sqlite3Statement, int, TableColumn?, SQLite3Native.ColType, T?> StatementGetter { get; init; }
+		public StatementSetter<T> StatementSetter { get; init; }
+		public StatementGetter<T> StatementGetter { get; init; }
 		public Func<ColumnDefinition?, SqliteCellType> DetermineCellType { get; init; }
 
 		object? IGenericConverterDefinition.StatementGetterBoxed(Sqlite3Statement statement, int index, TableColumn? column, SQLite3Native.ColType colType)
@@ -36,39 +48,54 @@ public static class ValueConverter
 		void IGenericConverterDefinition.StatementSetterBoxed(Sqlite3Statement statement, int index, TableColumn? column, object value)
 			=> StatementSetter(statement, index, column, (T)value);
 
-		Action<TRowObject, Sqlite3Statement, int> IGenericConverterDefinition.StatementGetterGeneric<TRowObject>(TableColumn column)
+		DirectStatementAccessorDelegate<TRowObject> IGenericConverterDefinition.DirectStatementGetter<TRowObject>(TableColumn column)
 		{
 			var setProperty = (Action<TRowObject, T?>)Delegate.CreateDelegate(
 				typeof(Action<TRowObject, T>),
 				null,
 				column.PropertyInfo.GetSetMethod());
 
-			return (o, stmt, i) => {
-				var colType = SQLite3Native.ColumnType(stmt, i);
-				var value = StatementGetter.Invoke(stmt, i, column, colType);
+			return (ref TRowObject row, Sqlite3Statement statement, int index) => {
+				var colType = SQLite3Native.ColumnType(statement, index);
+				var value = StatementGetter.Invoke(statement, index, column, colType);
 
 				if (colType != SQLite3Native.ColType.Null && value != null)
 				{
-					setProperty.Invoke(o, value);
+					setProperty.Invoke(row, value);
 				}
 			};
 		}
 
-		Action<TRowObject, Sqlite3Statement, int> IGenericConverterDefinition.StatementSetterGeneric<TRowObject>(TableColumn column)
+		public DirectStatementAccessorDelegate<TRowObject> DirectStatementGetter<TRowObject>(FieldInfo fieldInfo)
+		{
+			ActionRef<TRowObject, T> setProperty = ILHandler.CreateILSetter<TRowObject, T>(fieldInfo);
+
+			return (ref TRowObject row, Sqlite3Statement statement, int index) => {
+				var colType = SQLite3Native.ColumnType(statement, index);
+				var value = StatementGetter.Invoke(statement, index, null, colType);
+
+				if (colType != SQLite3Native.ColType.Null && value != null)
+				{
+					setProperty.Invoke(ref row, value);
+				}
+			};
+		}
+
+		DirectStatementAccessorDelegate<TRowObject> IGenericConverterDefinition.DirectStatementSetter<TRowObject>(TableColumn column)
 		{
 			var getProperty = (Func<TRowObject, T?>)Delegate.CreateDelegate(
 				typeof(Func<TRowObject, T?>),
 				null,
 				column.PropertyInfo.GetGetMethod());
 
-			return (o, stmt, i) =>
+			return (ref TRowObject row, Sqlite3Statement statement, int index) =>
 			{
-				var value = getProperty(o);
+				var value = getProperty(row);
 
 				if (value != null)
-					StatementSetter(stmt, i, column, value);
+					StatementSetter(statement, index, column, value);
 				else
-					SQLite3Native.BindNull(stmt, i);
+					SQLite3Native.BindNull(statement, index);
 			};
 		}
 	}
@@ -77,8 +104,8 @@ public static class ValueConverter
 	{
 		public Type ClrType { get; } = typeof(T);
 
-		public Action<Sqlite3Statement, int, TableColumn?, T> StatementSetter { get; init; }
-		public Func<Sqlite3Statement, int, TableColumn?, SQLite3Native.ColType, T> StatementGetter { get; init; }
+		public StatementSetter<T> StatementSetter { get; init; }
+		public StatementGetter<T> StatementGetter { get; init; }
 		public Func<ColumnDefinition?, SqliteCellType> DetermineCellType { get; init; }
 
 		public object? StatementGetterBoxed(Sqlite3Statement statement, int index, TableColumn? column, SQLite3Native.ColType colType)
@@ -86,7 +113,7 @@ public static class ValueConverter
 		public void StatementSetterBoxed(Sqlite3Statement statement, int index, TableColumn? column, object value)
 			=> StatementSetter(statement, index, column, (T)value);
 
-		public Action<TRowObject, Sqlite3Statement, int> StatementGetterGeneric<TRowObject>(TableColumn column)
+		DirectStatementAccessorDelegate<TRowObject> IGenericConverterDefinition.DirectStatementGetter<TRowObject>(TableColumn column)
 		{
 			var isNullable = column.PropertyInfo.PropertyType.Name == "Nullable`1";
 
@@ -97,13 +124,14 @@ public static class ValueConverter
 					null,
 					column.PropertyInfo.GetSetMethod());
 
-				return (o, stmt, i) => {
-					var colType = SQLite3Native.ColumnType(stmt, i);
-					var value = StatementGetter.Invoke(stmt, i, column, colType);
+				return (ref TRowObject row, Sqlite3Statement statement, int index) =>
+				{
+					var colType = SQLite3Native.ColumnType(statement, index);
+					var value = StatementGetter.Invoke(statement, index, column, colType);
 
 					if (colType != SQLite3Native.ColType.Null)
 					{
-						setNullableProperty.Invoke(o, value);
+						setNullableProperty.Invoke(row, value);
 					}
 				};
 			}
@@ -113,18 +141,34 @@ public static class ValueConverter
 				null,
 				column.PropertyInfo.GetSetMethod());
 
-			return (o, stmt, i) => {
-				var colType = SQLite3Native.ColumnType(stmt, i);
-				var value = StatementGetter.Invoke(stmt, i, column, colType);
+			return (ref TRowObject row, Sqlite3Statement statement, int index) =>
+			{
+				var colType = SQLite3Native.ColumnType(statement, index);
+				var value = StatementGetter.Invoke(statement, index, column, colType);
 
 				if (colType != SQLite3Native.ColType.Null)
 				{
-					setProperty.Invoke(o, value);
+					setProperty.Invoke(row, value);
 				}
 			};
 		}
 
-		Action<TRowObject, Sqlite3Statement, int> IGenericConverterDefinition.StatementSetterGeneric<TRowObject>(TableColumn column)
+		DirectStatementAccessorDelegate<TRowObject> IGenericConverterDefinition.DirectStatementGetter<TRowObject>(FieldInfo fieldInfo)
+		{
+			ActionRef<TRowObject, T> setProperty = ILHandler.CreateILSetter<TRowObject, T>(fieldInfo);
+
+			return (ref TRowObject row, Sqlite3Statement statement, int index) => {
+				var colType = SQLite3Native.ColumnType(statement, index);
+				var value = StatementGetter.Invoke(statement, index, null, colType);
+
+				if (colType != SQLite3Native.ColType.Null)
+				{
+					setProperty.Invoke(ref row, value);
+				}
+			};
+		}
+
+		DirectStatementAccessorDelegate<TRowObject> IGenericConverterDefinition.DirectStatementSetter<TRowObject>(TableColumn column)
 		{
 			var isNullable = column.PropertyInfo.PropertyType.Name == "Nullable`1";
 
@@ -135,14 +179,14 @@ public static class ValueConverter
 					null,
 					column.PropertyInfo.GetGetMethod());
 
-				return (o, stmt, i) =>
+				return (ref TRowObject row, Sqlite3Statement statement, int index) =>
 				{
-					var value = getProperty(o);
+					var value = getProperty(row);
 
 					if (value.HasValue)
-						StatementSetter(stmt, i, column, value.Value);
+						StatementSetter(statement, index, column, value.Value);
 					else
-						SQLite3Native.BindNull(stmt, i);
+						SQLite3Native.BindNull(statement, index);
 				};
 			}
 			else
@@ -152,7 +196,7 @@ public static class ValueConverter
 					null,
 					column.PropertyInfo.GetGetMethod());
 
-				return (o, stmt, i) => StatementSetter(stmt, i, column, getProperty(o));
+				return (ref TRowObject row, Sqlite3Statement statement, int index) => StatementSetter(statement, index, column, getProperty(row));
 			}
 		}
 	}
@@ -222,6 +266,14 @@ public static class ValueConverter
 		}
 	}
 
+	internal static IConverterDefinition<T> GetConverterDefinition<T>()
+	{
+		if (TryGetConverterDefinition(typeof(T), out var generic))
+			return (IConverterDefinition<T>)generic!;
+
+		throw new ArgumentOutOfRangeException(nameof(T), "Type does not exist");
+	}
+
 	internal static bool TryGetConverterDefinition<T>([NotNullWhen(true)] out IConverterDefinition<T>? definition)
 	{
 		var result = TryGetConverterDefinition(typeof(T), out var generic);
@@ -250,7 +302,7 @@ public static class ValueConverter
 		{
 			StatementGetter = static (statement, index, column, colType) => SQLite3Native.ColumnInt(statement, index),
 			StatementSetter = static (statement, index, column, value) => SQLite3Native.BindInt(statement, index, value),
-			DetermineCellType = _ => SqliteCellType.Integer
+			DetermineCellType = static _ => SqliteCellType.Integer
 		});
 
 		AddConverter(new StructConverterDefinition<bool>
@@ -557,5 +609,64 @@ public static class ValueConverter
 		//	},
 		//	DetermineCellType = static _ => SqliteCellType.Any
 		//});
+	}
+
+	private static class ILHandler
+	{
+		public static readonly Dictionary<FieldInfo, object> ILSetterCache = new();
+
+		public static ActionRef<TTarget, TValue> CreateILSetter<TTarget, TValue>(FieldInfo field)
+		{
+			if (ILSetterCache.TryGetValue(field, out var existing))
+				return (ActionRef<TTarget, TValue>)existing;
+
+			if (field == null) throw new ArgumentNullException(nameof(field));
+			if (field.IsInitOnly) throw new ArgumentException("Field is readonly.", nameof(field));
+			if (field.IsStatic) throw new ArgumentException("Field must be an instance field.", nameof(field));
+			if (field.DeclaringType != typeof(TTarget))
+				throw new ArgumentException("TTarget must match field.DeclaringType.", nameof(field));
+
+			var methodName = "fourlambda_sqlite_" + Guid.NewGuid().ToString("N");
+
+			var dm = new DynamicMethod(
+				methodName,
+				typeof(void),
+				[typeof(TTarget).MakeByRefType(), typeof(TValue)],
+				restrictedSkipVisibility: true);
+
+			var il = dm.GetILGenerator();
+
+			// Push target reference/address:
+			il.Emit(OpCodes.Ldarg_0); // stack: &TTarget
+
+			if (!field.DeclaringType.IsValueType)
+			{
+				// For reference-type declaring types, Ldarg_0 is a managed pointer to the reference.
+				// We need the reference itself on the stack for stfld -> load it via ldind.ref
+				il.Emit(OpCodes.Ldind_Ref); // stack: objectRef
+			}
+			// For value types, the managed pointer (&TTarget) is exactly what stfld expects.
+
+			// Push value (TValue)
+			il.Emit(OpCodes.Ldarg_1); // stack: targetRef / &target, value
+
+			// If the field type is Nullable<TValue> and TValue is the underlying value type,
+			// construct Nullable<TValue> from the TValue on the stack.
+			var fieldType = field.FieldType;
+			if (fieldType.IsGenericType && fieldType.GetGenericTypeDefinition() == typeof(Nullable<>))
+			{
+				var nullableCtor = fieldType.GetConstructor([typeof(TValue)]);
+				il.Emit(OpCodes.Newobj, nullableCtor); // replaces value on stack with Nullable<TValue>
+			}
+
+			// Emit stfld (instance field)
+			il.Emit(OpCodes.Stfld, field);
+
+			il.Emit(OpCodes.Ret);
+
+			var @delegate = (ActionRef<TTarget, TValue>)dm.CreateDelegate(typeof(ActionRef<TTarget, TValue>));
+			ILSetterCache[field] = @delegate;
+			return @delegate;
+		}
 	}
 }

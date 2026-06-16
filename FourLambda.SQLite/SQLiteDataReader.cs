@@ -1,6 +1,7 @@
 ﻿using System.Data;
 using System.Data.Common;
 using System.Runtime.CompilerServices;
+using static FourLambda.SQLite.ValueConverter;
 
 namespace FourLambda.SQLite;
 
@@ -15,7 +16,7 @@ public class SQLiteDataReader : DbDataReader, IDataRecord
 
 	private SQLite3Native.ColType[] columnTypes;
 
-	private int _fieldCount = 0;
+	private readonly int _fieldCount;
 	/// <inheritdoc />
 	public override int FieldCount => statement != 0 || IsActive ? _fieldCount : -1;
 
@@ -66,10 +67,10 @@ public class SQLiteDataReader : DbDataReader, IDataRecord
 	}
 
 	/// <inheritdoc />
-	public override bool GetBoolean(int ordinal) => GetValue<bool>(ordinal);
+	public override bool GetBoolean(int ordinal) => SafeReadFromStatement(ordinal, GenericConverterCache<bool>.Getter);
 
 	/// <inheritdoc />
-	public override byte GetByte(int ordinal) => GetValue<byte>(ordinal);
+	public override byte GetByte(int ordinal) => SafeReadFromStatement(ordinal, GenericConverterCache<byte>.Getter);
 
 	/// <inheritdoc />
 	public override long GetBytes(int ordinal, long dataOffset, byte[]? buffer, int bufferOffset, int length)
@@ -88,6 +89,8 @@ public class SQLiteDataReader : DbDataReader, IDataRecord
 
 		return memory.Length;
 	}
+
+	public byte[] GetBytes(int ordinal) => SafeReadFromStatement(ordinal, GenericConverterCache<byte[]>.Getter);
 
 	public ReadOnlySpan<byte> GetMemory(int ordinal, int offset, int length)
 	{
@@ -123,7 +126,7 @@ public class SQLiteDataReader : DbDataReader, IDataRecord
 	}
 
 	/// <inheritdoc />
-	public override char GetChar(int ordinal) => GetValue<string>(ordinal)[0];
+	public override char GetChar(int ordinal) => GetString(ordinal)[0];
 
 	/// <inheritdoc />
 	public override long GetChars(int ordinal, long dataOffset, char[]? buffer, int bufferOffset, int length)
@@ -132,31 +135,31 @@ public class SQLiteDataReader : DbDataReader, IDataRecord
 	}
 
 	/// <inheritdoc />
-	public override DateTime GetDateTime(int ordinal) => GetValue<DateTime>(ordinal);
+	public override DateTime GetDateTime(int ordinal) => SafeReadFromStatement(ordinal, GenericConverterCache<DateTime>.Getter);
 
 	/// <inheritdoc />
-	public override decimal GetDecimal(int ordinal) => GetValue<decimal>(ordinal);
+	public override decimal GetDecimal(int ordinal) => SafeReadFromStatement(ordinal, GenericConverterCache<decimal>.Getter);
 
 	/// <inheritdoc />
-	public override double GetDouble(int ordinal) => GetValue<double>(ordinal);
+	public override double GetDouble(int ordinal) => SafeReadFromStatement(ordinal, GenericConverterCache<double>.Getter);
 
 	/// <inheritdoc />
-	public override float GetFloat(int ordinal) => GetValue<float>(ordinal);
+	public override float GetFloat(int ordinal) => SafeReadFromStatement(ordinal, GenericConverterCache<float>.Getter);
 
 	/// <inheritdoc />
-	public override Guid GetGuid(int ordinal) => GetValue<Guid>(ordinal);
+	public override Guid GetGuid(int ordinal) => SafeReadFromStatement(ordinal, GenericConverterCache<Guid>.Getter);
 
 	/// <inheritdoc />
-	public override short GetInt16(int ordinal) => GetValue<short>(ordinal);
+	public override short GetInt16(int ordinal) => SafeReadFromStatement(ordinal, GenericConverterCache<short>.Getter);
 
 	/// <inheritdoc />
-	public override int GetInt32(int ordinal) => GetValue<int>(ordinal);
+	public override int GetInt32(int ordinal) => SafeReadFromStatement(ordinal, GenericConverterCache<int>.Getter);
 
 	/// <inheritdoc />
-	public override long GetInt64(int ordinal) => GetValue<long>(ordinal);
+	public override long GetInt64(int ordinal) => SafeReadFromStatement(ordinal, GenericConverterCache<long>.Getter);
 
 	/// <inheritdoc />
-	public override string GetString(int ordinal) => GetValue<string>(ordinal)!;
+	public override string GetString(int ordinal) => SafeReadFromStatement(ordinal, GenericConverterCache<string>.Getter);
 
 
 	/// <inheritdoc />
@@ -208,18 +211,45 @@ public class SQLiteDataReader : DbDataReader, IDataRecord
 			SQLite3Native.ColType.Integer => GetInt64(ordinal),
 			SQLite3Native.ColType.Real => GetDouble(ordinal),
 			SQLite3Native.ColType.Text => GetString(ordinal),
-			SQLite3Native.ColType.Blob => GetValue<byte[]>(ordinal)!,
+			SQLite3Native.ColType.Blob => GetBytes(ordinal)!,
 			SQLite3Native.ColType.Null => DBNull.Value,
 			_ => throw new ArgumentOutOfRangeException()
 		};
 	}
 
+	private T SafeReadFromStatement<T>(int ordinal, StatementGetter<T> statementGetter)
+	{
+		OrdinalCheck(ordinal);
+
+		var columnType = columnTypes[ordinal];
+
+		if (columnType == SQLite3Native.ColType.Null)
+			throw new InvalidCastException("Field is null");
+
+		return statementGetter.Invoke(statement, ordinal, null, columnType)!;
+	}
+
+	private Dictionary<Type, IGenericConverterDefinition>? localConverters = null;
 	public T GetValue<T>(int ordinal)
 	{
 		OrdinalCheck(ordinal);
 
-		if (!ValueConverter.TryGetConverterDefinition<T>(out var converter))
+		localConverters ??= new();
+
+		IConverterDefinition<T> converter;
+
+		if (localConverters.TryGetValue(typeof(T), out var boxedConverter))
+		{
+			converter = (IConverterDefinition<T>)boxedConverter;
+		}
+		else if (TryGetConverterDefinition(out converter))
+		{
+			localConverters.Add(typeof(T), converter);
+		}
+		else
+		{
 			throw new ArgumentException("Reader does not support type: " + typeof(T));
+		}
 
 		var colType = SQLite3Native.ColumnType(statement, ordinal);
 
@@ -305,5 +335,10 @@ public class SQLiteDataReader : DbDataReader, IDataRecord
 	~SQLiteDataReader()
 	{
 		Dispose();
+	}
+
+	private static class GenericConverterCache<T>
+	{
+		public static readonly StatementGetter<T> Getter = GetConverterDefinition<T>().StatementGetter;
 	}
 }
