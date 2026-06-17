@@ -36,4 +36,18 @@ public class UnicodeTest : DBTestHarness
 		Assert.AreEqual(1, ps.Count);
 		Assert.AreEqual(UnicodeTestString, ps[0].Name);
 	}
+
+	[Test]
+	public void QueryWithRawSql()
+	{
+		Database.Insert(new Product
+		{
+			Name = UnicodeTestString
+		});
+
+		var ps = Database.Query<Product>($"SELECT * FROM Product WHERE NAME = '{UnicodeTestString}'").ToList();
+
+		Assert.AreEqual(1, ps.Count);
+		Assert.AreEqual(UnicodeTestString, ps[0].Name);
+	}
 }

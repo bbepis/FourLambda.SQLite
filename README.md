@@ -42,6 +42,7 @@ Like the upstream version, this package has a lot of benefits:
 This fork also includes a lot of added features and fixed issues:
 
 - Massive performance and allocation improvements
+- Fixes executing SQL that contains unicode text [[#226](https://github.com/praeclarum/sqlite-net/issues/226)] [[#1162](https://github.com/praeclarum/sqlite-net/issues/1162)] [[#215](https://github.com/praeclarum/sqlite-net/issues/215)]
 - Up-to-date sqlite3 binaries [[#1297](https://github.com/praeclarum/sqlite-net/issues/1297)] [[#1282](https://github.com/praeclarum/sqlite-net/issues/1282)] [[#1288](https://github.com/praeclarum/sqlite-net/issues/1288)]
 - Support for composite / multiple column primary keys [[#280](https://github.com/praeclarum/sqlite-net/issues/280)] [[#642](https://github.com/praeclarum/sqlite-net/issues/642)] [[#1101](https://github.com/praeclarum/sqlite-net/issues/1101)]
 - Per-column string conversion definitions instead of a rigid global conversion ruleset [[#360](https://github.com/praeclarum/sqlite-net/issues/360)]
