@@ -57,7 +57,7 @@ public class NotNullAttributeTest : DBTestHarness
 		Database.CreateTable<ClassWithPK>();
 		var cols = Database.GetTableInfo("ClassWithPK");
 
-		Assert.AreEqual(1, cols.Count, "Failed to get table info");
+		Assert.AreEqual(1, cols.Length, "Failed to get table info");
 		Assert.IsFalse(cols[0].IsNullable, $"not null constraint was not created for the primary key");
 	}
 

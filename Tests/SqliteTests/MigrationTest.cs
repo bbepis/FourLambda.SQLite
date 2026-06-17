@@ -62,7 +62,7 @@ public class MigrationTest : DBTestHarness
 			db.CreateTable<TestAddBefore>();
 
 			var cols = db.GetTableInfo("TestAdd");
-			Assert.AreEqual(2, cols.Count);
+			Assert.AreEqual(2, cols.Length);
 
 			var o = new TestAddBefore
 			{
@@ -84,7 +84,7 @@ public class MigrationTest : DBTestHarness
 			db.CreateTable<TestAddAfter>();
 
 			var cols = db.GetTableInfo("TestAdd");
-			Assert.AreEqual(4, cols.Count);
+			Assert.AreEqual(4, cols.Length);
 
 			var oo = db.Table<TestAddAfter>().First();
 

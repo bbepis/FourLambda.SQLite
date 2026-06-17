@@ -106,7 +106,7 @@ public class TableQuery<
 		}
 
 		var args = new List<QueryArgument>();
-		var cmdText = "delete from \"" + Table.TableName + "\"";
+		var cmdText = $"DELETE FROM {SQLiteConnection.EscapeIdentifier(Table.TableName)}";
 		var w = CompileExpr(pred, args);
 		cmdText += " where " + w.CommandText;
 
@@ -267,7 +267,7 @@ public class TableQuery<
 		}
 		else
 		{
-			var cmdText = "select " + selectionList + " from \"" + Table.TableName + "\"";
+			var cmdText = $"SELECT {selectionList} FROM {SQLiteConnection.EscapeIdentifier(Table.TableName)}";
 			var args = new List<QueryArgument>();
 			if (_where != null)
 			{

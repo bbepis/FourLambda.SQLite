@@ -671,7 +671,7 @@ public static class SQLiteConnectionAsyncExtensions
 	/// <param name="connection">The database connection.</param>
 	/// <param name="tableName">Table name.</param>
 	/// <returns>The columns contained in the table.</returns>
-	public static Task<List<ColumnDefinition>> GetTableInfoAsync(this SQLiteConnection connection, string tableName)
+	public static Task<ColumnDefinition[]> GetTableInfoAsync(this SQLiteConnection connection, string tableName)
 	{
 		return Task.Run(() => connection.GetTableInfo(tableName));
 	}

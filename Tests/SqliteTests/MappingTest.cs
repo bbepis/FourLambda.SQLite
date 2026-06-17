@@ -51,9 +51,9 @@ public class MappingTest : DBTestHarness
 		Database.CreateTable<OverrideNamesClass>();
 
 		var cols = Database.GetTableInfo("OverrideNamesClass");
-		Assert.AreEqual(3, cols.Count);
-		Assert.IsTrue(cols.Exists(x => x.Name == "n"));
-		Assert.IsTrue(cols.Exists(x => x.Name == "v"));
+		Assert.AreEqual(3, cols.Length);
+		Assert.IsTrue(cols.Any(x => x.Name == "n"));
+		Assert.IsTrue(cols.Any(x => x.Name == "v"));
 
 		var o = new OverrideNamesClass
 		{

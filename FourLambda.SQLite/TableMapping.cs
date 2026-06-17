@@ -141,7 +141,7 @@ internal TableMapping(
 
 		if (PrimaryKeyColumns.Length > 0)
 		{
-			PKWhereSql = "where " + string.Join(" and ", PrimaryKeyColumns.Select(pk => $"\"{pk.Name}\" = ?"));
+			PKWhereSql = $"WHERE {string.Join(" AND ", PrimaryKeyColumns.Select(pk => $"{SQLiteConnection.EscapeIdentifier(pk.Name)} = ?"))}";
 		}
 		else
 		{
@@ -255,23 +255,23 @@ public sealed class TableColumn
 			_ => throw new ArgumentOutOfRangeException()
 		};
 
-		string decl = $"\"{Name}\" {sqliteType}";
+		string decl = $"{SQLiteConnection.EscapeIdentifier(Name)} {sqliteType}";
 
 		if (!IsNullable)
 		{
-			decl += " not null";
+			decl += " NOT NULL";
 
 			if (!IsPK)
 			{
 				// TODO: set default value for other types
 				if (SqliteType == SqliteCellType.Integer)
-					decl += " default 0";
+					decl += " DEFAULT 0";
 			}
 		}
 
 		if (!string.IsNullOrEmpty(Collation))
 		{
-			decl += $" collate {Collation}";
+			decl += $" COLLATE {Collation}";
 		}
 
 		return decl;

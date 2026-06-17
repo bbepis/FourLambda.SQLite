@@ -379,7 +379,7 @@ public class AsyncExtensionsTest : DBTestHarness
     public async Task GetTableInfoAsync_ReturnsColumns()
     {
         var cols = await Database.GetTableInfoAsync("TestObj");
-        Assert.AreEqual(3, cols.Count);
+        Assert.AreEqual(3, cols.Length);
         Assert.True(cols.Any(c => c.Name == "Id"));
         Assert.True(cols.Any(c => c.Name == "Text"));
         Assert.True(cols.Any(c => c.Name == "Value"));

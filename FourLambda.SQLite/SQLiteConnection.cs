@@ -228,9 +228,9 @@ public class SQLiteConnection : IDisposable
 	/// <summary>
 	/// Convert an input string to a quoted SQL string that can be safely used in queries.
 	/// </summary>
-	/// <returns>The quoted string.</returns>
-	/// <param name="unsafeString">The unsafe string to quote.</param>
-	public static string EscapeAndQuote(string unsafeString)
+	/// <param name="unsafeString">The string to quote, or null.</param>
+	/// <returns>The quoted string safe for embedding in SQL.</returns>
+	public static string EscapeAndQuote(string? unsafeString)
 	{
 		// TODO: Doesn't call sqlite3_mprintf("%Q", u) because we're waiting on https://github.com/ericsink/SQLitePCL.raw/issues/153
 		if (unsafeString == null)
@@ -238,6 +238,16 @@ public class SQLiteConnection : IDisposable
 
 		var safe = unsafeString.Replace("'", "''");
 		return $"'{safe}'";
+	}
+
+	/// <summary>
+	/// Converts an input string to a double-quoted SQL string that can be safely used as an identifier.
+	/// </summary>
+	/// <param name="unsafeString">The string to quote, or null.</param>
+	/// <returns>The quoted string safe for embedding in SQL.</returns>
+	internal static string EscapeIdentifier(string unsafeString)
+	{
+		return $"\"{unsafeString.Replace("\"", "\"\"")}\"";
 	}
 
 	#region Encryption
@@ -656,7 +666,7 @@ public class SQLiteConnection : IDisposable
 	/// <param name="tableName">Table name.</param>
 	public List<ColumnDefinition> GetTableInfo(string tableName)
 	{
-		var query = "select name, \"notnull\" from pragma_table_info(\'" + tableName + "\')";
+		var query = $"SELECT name, \"notnull\" FROM pragma_table_info({EscapeAndQuote(tableName)})";
 		return Query<(string name, int notnull)>(query)
 			.Select(x =>
 				new ColumnDefinition(x.name, typeof(object))
@@ -752,7 +762,7 @@ public class SQLiteConnection : IDisposable
 		var existingCols = GetTableInfo(map.TableName);
 
 		// Create or migrate it
-		if (existingCols.Count == 0)
+		if (existingCols.Length == 0)
 		{
 			// Facilitate virtual tables a.k.a. full-text search.
 			bool fts3 = (map.CreateFlags & TableCreateFlags.FullTextSearch3) != 0;
@@ -765,7 +775,7 @@ public class SQLiteConnection : IDisposable
 			// Build query.
 			var stringBuilder = new StringBuilder();
 
-			stringBuilder.Append($"CREATE {@virtual}TABLE IF NOT EXISTS \"{map.TableName}\" {@using}(\n");
+			stringBuilder.Append($"CREATE {@virtual}TABLE IF NOT EXISTS {EscapeIdentifier(map.TableName)} {@using}(\n");
 
 			var definitions = new List<string>();
 
@@ -775,7 +785,7 @@ public class SQLiteConnection : IDisposable
 			if (map.PrimaryKeyColumns.Length > 0)
 			{
 				var autoIncrement = map.PrimaryKeyColumns.Any(x => x.IsAutoInc) ? " AUTOINCREMENT" : "";
-				definitions.Add($"PRIMARY KEY ({string.Join(", ", map.PrimaryKeyColumns.Select(x => x.Name))}{autoIncrement})");
+				definitions.Add($"PRIMARY KEY ({string.Join(", ", map.PrimaryKeyColumns.Select(x => EscapeIdentifier(x.Name)))}{autoIncrement})");
 			}
 
 			for (var i = 0; i < definitions.Count; i++)
@@ -847,7 +857,7 @@ public class SQLiteConnection : IDisposable
 		return result;
 	}
 
-	private void MigrateTable(TableMapping map, List<ColumnDefinition> existingCols)
+	private void MigrateTable(TableMapping map, ColumnDefinition[] existingCols)
 	{
 		var toBeAdded = map.Columns
 			.Where(newCol =>
@@ -861,7 +871,7 @@ public class SQLiteConnection : IDisposable
 
 		foreach (var p in toBeAdded)
 		{
-			var addCol = $"alter table \"{map.TableName}\" add column {p.GetCreationSql()}";
+			var addCol = $"ALTER TABLE {EscapeIdentifier(map.TableName)} ADD COLUMN {p.GetCreationSql()}";
 			Execute(addCol);
 		}
 	}
@@ -919,8 +929,7 @@ public class SQLiteConnection : IDisposable
 	/// </summary>
 	public int DropTable(TableMapping map)
 	{
-		var query = $"drop table if exists \"{map.TableName}\"";
-		return Execute(query);
+		return Execute($"DROP TABLE IF EXISTS {EscapeIdentifier(map.TableName)}");
 	}
 
 	#endregion
@@ -1169,9 +1178,8 @@ public class SQLiteConnection : IDisposable
 		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
 		T>()
 	{
-		// TODO: escape all usages of table name
 		var map = GetMapping<T>();
-		var cmd = CreateCommand($"SELECT * FROM \"{map.TableName}\"");
+		var cmd = CreateCommand($"SELECT * FROM {EscapeIdentifier(map.TableName)}");
 		return cmd.ExecuteQuery<T>();
 	}
 
@@ -1326,7 +1334,7 @@ public class SQLiteConnection : IDisposable
 		if (primaryKey.Length == 0)
 			throw new ArgumentException("A primary key must be provided");
 
-		return Query<T>(map, $"select * from \"{map.TableName}\" {map.PKWhereSql}", primaryKey).FirstOrDefault();
+		return Query<T>(map, $"SELECT * FROM {EscapeIdentifier(map.TableName)} {map.PKWhereSql}", primaryKey).FirstOrDefault();
 	}
 
 	/// <summary>
@@ -1593,7 +1601,7 @@ public class SQLiteConnection : IDisposable
 
 		if (cols.Length == 0 && map.Columns.Length == 1 && map.Columns[0].IsAutoInc)
 		{
-			insertSql = $"INSERT{orAction} INTO \"{map.TableName}\" DEFAULT VALUES";
+			insertSql = $"INSERT{orAction} INTO {EscapeIdentifier(map.TableName)} DEFAULT VALUES";
 		}
 		else
 		{
@@ -1602,10 +1610,10 @@ public class SQLiteConnection : IDisposable
 				cols = map.InsertOrReplaceColumns;
 			}
 
-			var columnNames = string.Join(",", cols.Select(c => $"\"{c.Name}\""));
+			var columnNames = string.Join(",", cols.Select(c => EscapeIdentifier(c.Name)));
 			var valueSlots = string.Join(",", Enumerable.Repeat("?", cols.Length));
 
-			insertSql = $"INSERT{orAction} INTO \"{map.TableName}\"({columnNames})VALUES({valueSlots})";
+			insertSql = $"INSERT{orAction} INTO {EscapeIdentifier(map.TableName)}({columnNames})VALUES({valueSlots})";
 		}
 
 		var insertCommand = PreparedInsertCommand<object>.Create(map.MappedType, this, insertSql, cols);
@@ -1681,10 +1689,9 @@ public class SQLiteConnection : IDisposable
 
 		foreach (var pk in map.PrimaryKeyColumns)
 			ps.Add(pk.GetValue(obj));
-
-		var q = string.Format("update \"{0}\" set {1} {2}", map.TableName,
-			string.Join(",", cols.Select(c => "\"" + c.Name + "\" = ? ").ToArray()),
-			map.PKWhereSql);
+		
+		var setColumns = string.Join(",", cols.Select(c => $"{EscapeIdentifier(c.Name)} = ?"));
+		var q = $"UPDATE {EscapeIdentifier(map.TableName)} SET {setColumns} {map.PKWhereSql}";
 
 		try
 		{
@@ -1787,11 +1794,9 @@ public class SQLiteConnection : IDisposable
 		var map = GetMapping(item.GetType());
 
 		if (map.PrimaryKeyColumns.Length == 0)
-		{
-			throw new NotSupportedException("Cannot delete " + map.TableName + ": it has no PK");
-		}
+			throw new NotSupportedException($"Cannot delete from {map.TableName}: it has no PK");
 
-		var q = $"delete from \"{map.TableName}\" {map.PKWhereSql}";
+		var q = $"DELETE FROM {EscapeIdentifier(map.TableName)} {map.PKWhereSql}";
 
 		var count = Execute(q, map.PrimaryKeyColumns.Select(x => x.GetValue(item)).ToArray());
 
@@ -1834,7 +1839,7 @@ public class SQLiteConnection : IDisposable
 		if (map.PrimaryKeyColumns.Length == 0)
 			throw new ArgumentException("Cannot delete with this table mapping as it has no primary key");
 
-		var q = $"delete from \"{map.TableName}\" {map.PKWhereSql}";
+		var q = $"DELETE FROM {EscapeIdentifier(map.TableName)} {map.PKWhereSql}";
 		var count = Execute(q, primaryKey);
 
 		return count;
@@ -1871,7 +1876,7 @@ public class SQLiteConnection : IDisposable
 	/// </returns>
 	public int DeleteAll(TableMapping map)
 	{
-		var query = $"delete from \"{map.TableName}\"";
+		var query = $"DELETE FROM {EscapeIdentifier(map.TableName)}";
 		var count = Execute(query);
 
 		return count;
