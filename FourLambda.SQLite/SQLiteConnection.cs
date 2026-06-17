@@ -207,13 +207,22 @@ public class SQLiteConnection : IDisposable
 	}
 
 	/// <summary>
-	/// Enables the write ahead logging. WAL is significantly faster in most scenarios
-	/// by providing better concurrency and better disk IO performance than the normal
-	/// journal mode. You only need to call this function once in the lifetime of the database.
+	/// The write journal type the database is using.
+	/// <br/>See <see href="https://sqlite.org/pragma.html#pragma_journal_mode"/> for more information
 	/// </summary>
-	public void EnableWriteAheadLogging()
+	public WriteJournalType JournalType
 	{
-		ExecuteScalar<string>("PRAGMA journal_mode=WAL");
+		get => Enum.Parse<WriteJournalType>(ExecuteScalar<string>("PRAGMA journal_mode"), true);
+		set
+		{
+			if (!Enum.IsDefined(value))
+				throw new ArgumentOutOfRangeException(nameof(value), "Not a valid journal type");
+
+			var result = ExecuteScalar<WriteJournalType>($"PRAGMA journal_mode = {value.ToString().ToUpper()}");
+
+			if (result != value)
+				throw new InvalidOperationException($"Unable to set journal_mode to {value}");
+		}
 	}
 
 	/// <summary>
@@ -2066,7 +2075,8 @@ public class SQLiteConnectionString
 }
 
 /// <summary>
-/// https://sqlite.org/lang_conflict.html
+/// Defines what action to take if an inserted row conflicts with one that already exists.
+/// <br/>See <see href="https://sqlite.org/lang_conflict.html"/>
 /// </summary>
 public enum InsertConflictAction
 {
@@ -2090,6 +2100,39 @@ public enum InsertConflictAction
 	/// Upon conflict, the insert fails and any active transaction is rolled back. If there is no active transaction, it acts the same as <see cref="Abort"/>.
 	/// </summary>
 	Rollback
+}
+
+/// <summary>
+/// The journaling mode of the database, which defines how SQLite maintains write safety &amp; atomicity, and how it handles transactions.
+/// <br/>See <see href="https://sqlite.org/pragma.html#pragma_journal_mode"/>
+/// </summary>
+public enum WriteJournalType
+{
+	/// <summary>
+	/// The write journal is completely disabled. While the fastest, writes are no longer atomic and transaction rollbacks stop working. If the application crashes in this mode, the database very likely becomes corrupt.
+	/// </summary>
+	Off,
+	/// <summary>
+	/// Default journal type. The write journal file is deleted at the conclusion of each transaction.
+	/// </summary>
+	Delete,
+	/// <summary>
+	/// The write journal file is truncated to zero at the conclusion of each transaction.
+	/// </summary>
+	Truncate,
+	/// <summary>
+	/// The write journal file has its header set to zero at the conclusion of each transaction.
+	/// </summary>
+	Persist,
+	/// <summary>
+	/// The write journal is kept completely in memory, which makes it very fast. If the application crashes in this mode, the database very likely becomes corrupt.
+	/// </summary>
+	Memory,
+	/// <summary>
+	/// The write journal is implemented as a write-ahead log instead of a journal file. This is generally much faster than the other file-based options, and is recommended where possible.
+	/// <br/> See <see href="https://sqlite.org/wal.html"/> for more details.
+	/// </summary>
+	WAL
 }
 
 #if EncryptionEnabled
