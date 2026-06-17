@@ -86,7 +86,8 @@ Stats for pulling 500,000 rows using different methods:
 
 As compared to the upstream `sqlite-pcl` package:
 
-- SQLiteAsyncConnection / asynchronous versions of methods have been removed. If you want to asynchronously await database calls, wrap them in `await Task.Run(() => { ... })`. It's basically [what the original implementation does](https://github.com/praeclarum/sqlite-net/blob/master/src/SQLiteAsync.cs#L478-L515) under the hood
+- SQLiteAsyncConnection has been removed, and async versions of functions are instead implemented via extension methods.
+  - Note that none of these are *actually* async and use `Task.Run` to offload work from the current thread. It's basically [what the original async implementation does](https://github.com/praeclarum/sqlite-net/blob/master/src/SQLiteAsync.cs#L478-L515) under the hood as well
 - Many compiler directives relating to UWP/alternative/older platforms have been removed. .NET 8 and .NET 10 are the main targets for this project
 - Implicit index creation is not supported (e.g. using `CreateFlags.ImplicitIndex` or ending property names in `Id`). Manually mark your properties you wish to have indexed with `[Index]`
 - `[StoreAsText]` can't be applied to `enum` declarations anymore. Instead, apply them to each property column you wish to have converted
@@ -95,7 +96,7 @@ As compared to the upstream `sqlite-pcl` package:
   - If you wish to store these values as strings (which required to keep timezone information in `DateTimeOffset`), apply `[StoreAsText]` to the column property.
   - `DateTimeStringFormat` is instead a parameter to the `[StoreAsText]` attribute.
 - A lot of lifecycle events and hooks no longer exist as part of API simplification
-- Query/QueryScalars/DeferredQuery have been merged into just Query<T>. If you want to get an IEnumerable of scalars, just pass the scalar type to Query
+- Query/QueryScalars/DeferredQuery have been merged into just Query<T>(). If you want to get an IEnumerable of scalars, just pass the scalar type to Query
 - `RunInTransaction` has been removed in favor of `CreateTransactionScope`, which mimics ITransactionScope from EF.Core
 - Scalar support for `Uri`, `StringBuilder` and `UriBuilder` have been removed. If you need them back, you can add your own custom serialization definitions
 

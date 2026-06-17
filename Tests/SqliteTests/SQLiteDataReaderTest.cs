@@ -829,6 +829,20 @@ public class SQLiteDataReaderTest : DBTestHarness
 	}
 
 	[Test]
+	public async Task Reader_Async_Query()
+	{
+		using var reader = Database.ExecuteReader("SELECT Name FROM DataRecord WHERE Age > ?", 28);
+
+		var names = new List<string>();
+		while (await reader.ReadAsync())
+		{
+			names.Add(reader.GetString(0));
+		}
+
+		Assert.That(names, Is.EquivalentTo(new[] { "Alice", "Charlie" }));
+	}
+
+	[Test]
 	public void Reader_MultipleReaders_SameConnection()
 	{
 		using var reader1 = Database.ExecuteReader("SELECT Name FROM DataRecord WHERE Id = 1");

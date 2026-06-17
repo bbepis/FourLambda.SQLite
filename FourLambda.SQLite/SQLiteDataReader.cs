@@ -311,6 +311,12 @@ public class SQLiteDataReader : DbDataReader, IDataRecord
 	}
 
 	/// <inheritdoc />
+	public override Task<bool> ReadAsync(CancellationToken cancellationToken)
+	{
+		return Task.Run(Read, cancellationToken);
+	}
+
+	/// <inheritdoc />
 	public override IEnumerator GetEnumerator()
 	{
 		while (Read())
