@@ -13,13 +13,6 @@
   </p>
 </div>
 
-<style>
-    table {
-        width: 100%;
-    }
-</style>
-
-
 ## Overview
 
 This fork exists because I have been hitting my head on some longstanding issues in the original package. Since they require very large architectural changes and the original project has been more or less dead for a while, I figured they would be very unlikely to get merged in.
@@ -59,9 +52,9 @@ Stats for bulk inserting 500,000 rows:
 
 | Library               |         Time |            Ratio | Allocated      |     Allocated Ratio |
 | --------------------- | -----------: | ---------------: | -------------: | ------------------: |
-| **FourLambda**        | **321.8 ms** | **1.90x faster** |    **0.02 MB** | **11,620.17x less** |
-| SQLitePCL             |     612.3 ms | 1.00x (baseline) |      261.99 MB |    1.00x (baseline) |
-| Microsoft.Data.Sqlite |   1,359.4 ms |     2.23x slower |      676.06 MB |          2.58x more |
+| **FourLambda.SQLite**        | **321.8 ms** | **1.90x faster** |    **0.02 MB** | **11,620.17x less** |
+| [sqlite-net](https://github.com/praeclarum/sqlite-net)            |     612.3 ms | 1.00x (baseline) |      261.99 MB |    1.00x (baseline) |
+| [Microsoft.Data.Sqlite](https://www.nuget.org/packages/microsoft.data.sqlite/) |   1,359.4 ms |     2.23x slower |      676.06 MB |          2.58x more |
 
 ### Reading
 
@@ -69,16 +62,16 @@ Stats for pulling 500,000 rows using different methods:
 
 | Library               |                                Method |          Time |            Ratio | Allocated      |      Alloc Ratio |
 | --------------------- | ------------------------------------- | ------------: | ---------------: | -------------: |   -------------: |
-| **FourLambda**        | **Query (into value tuple)**          | **199.24 ms** | **1.94x faster** |   **43.24 MB** |   **3.00x less** |
-| **FourLambda**        | **DataReader**                        | **208.00 ms** | **1.87x faster** |   **43.24 MB** |   **3.00x less** |
-| **FourLambda**        | **Query (into object)**               | **210.51 ms** | **1.84x faster** |   **82.30 MB** |   **1.57x less** |
-| SQLitePCL             | DeferredQuery (into object)           |     387.17 ms | 1.00x (baseline) |      129.18 MB | 1.00x (baseline) |
-| Microsoft.Data.Sqlite | DataReader                            |     399.55 ms |     1.03x slower |       43.25 MB |       3.00x less |
-| SQLitePCL             | DeferredQuery (into value tuple)      |     451.84 ms |     1.17x slower |      176.06 MB |       1.36x more |
+| **FourLambda.SQLite**        | **Query (into value tuple)**          | **199.24 ms** | **1.94x faster** |   **43.24 MB** |   **3.00x less** |
+| **FourLambda.SQLite**        | **DataReader**                        | **208.00 ms** | **1.87x faster** |   **43.24 MB** |   **3.00x less** |
+| **FourLambda.SQLite**        | **Query (into object)**               | **210.51 ms** | **1.84x faster** |   **82.30 MB** |   **1.57x less** |
+| [sqlite-net](https://github.com/praeclarum/sqlite-net)            | DeferredQuery (into object)           |     387.17 ms | 1.00x (baseline) |      129.18 MB | 1.00x (baseline) |
+| [Microsoft.Data.Sqlite](https://www.nuget.org/packages/microsoft.data.sqlite/) | DataReader                            |     399.55 ms |     1.03x slower |       43.25 MB |       3.00x less |
+| [sqlite-net](https://github.com/praeclarum/sqlite-net)            | DeferredQuery (into value tuple)      |     451.84 ms |     1.17x slower |      176.06 MB |       1.36x more |
 
 ## Breaking Changes
 
-As compared to the upstream `sqlite-pcl` package:
+As compared to the upstream `sqlite-net` package:
 
 - SQLiteAsyncConnection has been removed, and async versions of functions are instead implemented via extension methods.
   - Note that none of these are *actually* async and use `Task.Run` to offload work from the current thread. It's basically [what the original async implementation does](https://github.com/praeclarum/sqlite-net/blob/master/src/SQLiteAsync.cs#L478-L515) under the hood as well
@@ -329,7 +322,7 @@ ValueConverter.AddConverter<MyCustomType>(
 );
 ```
 
-See the tests or base type implementations for more examples.
+See the [tests](https://github.com/bbepis/FourLambda.SQLite/blob/master/Tests/SqliteTests/CustomConverterTest.cs#L66) or [base type implementations](https://github.com/bbepis/FourLambda.SQLite/blob/master/FourLambda.SQLite/ValueConverter.cs#L376) for more examples.
 
 ## License
 

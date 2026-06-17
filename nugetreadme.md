@@ -2,12 +2,9 @@
   <h3 align="center">FourLambda.SQLite</h3>
 
   <p align="center">
-    SQLite bindings for C#
+    SQLite ORM and bindings for C#
     <br />
-    Forked from <a href="https://github.com/praeclarum/sqlite-net">https://github.com/praeclarum/sqlite-net</a>
-    <br />
-    <br />
-    <a href="https://github.com/bbepis/FourLambda.Sqlite"><strong>Documentation »</strong></a>
+    <a href="https://github.com/bbepis/FourLambda.SQLite"><strong>Project page »</strong></a>
     <br />
   </p>
 </div>
