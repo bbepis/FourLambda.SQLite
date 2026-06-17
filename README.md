@@ -41,6 +41,7 @@ Like the upstream version, this package has a lot of benefits:
 
 This fork also includes a lot of added features and fixed issues:
 
+- Massive performance and allocation improvements
 - Up-to-date sqlite3 binaries [[#1297](https://github.com/praeclarum/sqlite-net/issues/1297)] [[#1282](https://github.com/praeclarum/sqlite-net/issues/1282)] [[#1288](https://github.com/praeclarum/sqlite-net/issues/1288)]
 - Support for composite / multiple column primary keys [[#280](https://github.com/praeclarum/sqlite-net/issues/280)] [[#642](https://github.com/praeclarum/sqlite-net/issues/642)] [[#1101](https://github.com/praeclarum/sqlite-net/issues/1101)]
 - Per-column string conversion definitions instead of a rigid global conversion ruleset [[#360](https://github.com/praeclarum/sqlite-net/issues/360)]
@@ -53,7 +54,7 @@ This fork also includes a lot of added features and fixed issues:
 - Structs can be used for query data results [[#1075](https://github.com/praeclarum/sqlite-net/issues/1075)] [[#1266](https://github.com/praeclarum/sqlite-net/pull/1266)]
 - Column data type serialization is extensible, so you can now provide your own custom column definitions [[#847](https://github.com/praeclarum/sqlite-net/issues/847)] [[#1285](https://github.com/praeclarum/sqlite-net/issues/1285)] [[#534](https://github.com/praeclarum/sqlite-net/pull/534)] [[#623](https://github.com/praeclarum/sqlite-net/pull/623)]
 - Complete rework of public API, with much of the old confusing and redundant API surface unified
-- Much needed modernization, refactoring, performance improvements and TLC for the codebase.
+- Much needed modernization, refactoring and TLC for the codebase.
 
 ## Benchmarks
 
@@ -63,24 +64,24 @@ Here are some benchmarks compared to the upstream sqlite-net fork and the standa
 
 Stats for bulk inserting 500,000 rows:
 
-| Library        |         Time |            Ratio | Allocated (MB) |     Allocated Ratio |
-| -------------- | -----------: | ---------------: | -------------: | ------------------: |
-| **FourLambda** | **321.8 ms** | **1.90x faster** |    **0.02 MB** | **11,620.17x less** |
-| SQLitePCL      |     612.3 ms | 1.00x (baseline) |      261.99 MB |    1.00x (baseline) |
-| Microsoft      |   1,359.4 ms |     2.23x slower |      676.06 MB |          2.58x more |
+| Library               |         Time |            Ratio | Allocated      |     Allocated Ratio |
+| --------------------- | -----------: | ---------------: | -------------: | ------------------: |
+| **FourLambda**        | **321.8 ms** | **1.90x faster** |    **0.02 MB** | **11,620.17x less** |
+| SQLitePCL             |     612.3 ms | 1.00x (baseline) |      261.99 MB |    1.00x (baseline) |
+| Microsoft.Data.Sqlite |   1,359.4 ms |     2.23x slower |      676.06 MB |          2.58x more |
 
 ### Reading
 
 Stats for pulling 500,000 rows using different methods:
 
-| Library        |                                Method |          Time |            Ratio | Allocated (MB) |      Alloc Ratio |
-| -------------- | ------------------------------------- | ------------: | ---------------: | -------------: |   -------------: |
-| **FourLambda** | **Query (into value tuple)**          | **199.24 ms** | **1.94x faster** |   **43.24 MB** |   **3.00x less** |
-| **FourLambda** | **DataReader**                        | **208.00 ms** | **1.87x faster** |   **43.24 MB** |   **3.00x less** |
-| **FourLambda** | **Query (into object)**               | **210.51 ms** | **1.84x faster** |   **82.30 MB** |   **1.57x less** |
-| SQLitePCL      | DeferredQuery (into object)           |     387.17 ms | 1.00x (baseline) |      129.18 MB | 1.00x (baseline) |
-| Microsoft      | DataReader                            |     399.55 ms |     1.03x slower |       43.25 MB |       3.00x less |
-| SQLitePCL      | DeferredQuery (into value tuple)      |     451.84 ms |     1.17x slower |      176.06 MB |       1.36x more |
+| Library               |                                Method |          Time |            Ratio | Allocated      |      Alloc Ratio |
+| --------------------- | ------------------------------------- | ------------: | ---------------: | -------------: |   -------------: |
+| **FourLambda**        | **Query (into value tuple)**          | **199.24 ms** | **1.94x faster** |   **43.24 MB** |   **3.00x less** |
+| **FourLambda**        | **DataReader**                        | **208.00 ms** | **1.87x faster** |   **43.24 MB** |   **3.00x less** |
+| **FourLambda**        | **Query (into object)**               | **210.51 ms** | **1.84x faster** |   **82.30 MB** |   **1.57x less** |
+| SQLitePCL             | DeferredQuery (into object)           |     387.17 ms | 1.00x (baseline) |      129.18 MB | 1.00x (baseline) |
+| Microsoft.Data.Sqlite | DataReader                            |     399.55 ms |     1.03x slower |       43.25 MB |       3.00x less |
+| SQLitePCL             | DeferredQuery (into value tuple)      |     451.84 ms |     1.17x slower |      176.06 MB |       1.36x more |
 
 ## Breaking Changes
 
@@ -128,8 +129,8 @@ public class Product
 Open a connection and create the table:
 
 ```csharp
-using var db = new SQLiteConnection("my_database.db");
-db.CreateTable<Product>();
+using var connection = new SQLiteConnection("my_database.db");
+connection.CreateTable<Product>();
 ```
 
 Insert, query, update, and delete records:
@@ -137,40 +138,88 @@ Insert, query, update, and delete records:
 ```csharp
 // Insert a row (returns number of rows affected)
 var p = new Product { Name = "Widget", Price = 9.99m };
-db.Insert(p); // p.Id is now populated with the auto-incremented key
+connection.Insert(p); // p.Id is now populated with the auto-incremented key
 
 // Query using LINQ via Table<T>()
-var expensive = db.Table<Product>().Where(x => x.Price > 5.00).ToList();
+var expensive = connection.Table<Product>().Where(x => x.Price > 5.00).ToList();
 
 // Retrieve by primary key
-var found = db.Find<Product>(p.Id);
+var found = connection.Find<Product>(p.Id);
 
 // Update an existing row
 found.Price = 7.99m;
-db.Update(found);
+connection.Update(found);
 
 // Delete a single row by object or primary key
-db.Delete(found);
+connection.Delete(found);
 // or
-db.Delete<Product>(p.Id);
+connection.Delete<Product>(p.Id);
 
 // Batch insert multiple rows
 var products = new[] { new Product { Name = "Gadget", Price = 19.99m } };
-db.InsertAll(products);
+connection.InsertAll(products);
 
 // Delete all matching a predicate
-db.Table<Product>().Delete(x => x.Price < 10m);
+connection.Table<Product>().Delete(x => x.Price < 10m);
 ```
 
-<!-- USAGE EXAMPLES -->
 ## Usage
 
-### LINQ Queries with `Table<T>`
+### Querying
 
-`Table<T>()` returns a queryable that translates `.Where()`, `.OrderBy()`, `.Take()`, and `.Skip()` into SQL:
+There are multiple ways of retrieving data from a table, all using the same `SQLiteConnection.Query<T>()` method:
 
 ```csharp
-var results = db.Table<Product>()
+public class TestData
+{
+    public int ID { get; set; }
+
+    public string TextValue { get; set; }
+}
+
+// Return all data from a table
+IEnumerable<TestData> results = connection.Query<TestData>();
+
+// Return using a specific select query
+results = connection.Query<TestData>("SELECT * FROM TestData WHERE TextValue = ?", "myValue");
+
+// Return using a predicate expression to filter data
+results = connection.Query<TestData>(x => x.ID == 1);
+```
+
+If you need to use a table mapping constructed at runtime that doesn't correspond to an existing type, then you can use overloads that accept a `TableMapping` parameter.
+
+The type associated to a SQLite table does not have to be the type that is used for a query. If you provide a table mapping or SQL statement, then the ORM is smart enough to load data into these types as well.
+
+Three additional classes of types are available: scalars, value tuples and adjacent types:
+
+```csharp
+// Using a scalar
+var results = connection.Query<int>("SELECT ID FROM TestData");
+
+// Using a value tuple
+var results = connection.Query<(int id, string textValue)>("SELECT ID, TextValue FROM TestData");
+
+// Using an adjacent type
+
+var mapping = connection.GetMapping<TestData>();
+
+public class AdjacentType
+{
+    public string TextValue { get; set; }
+}
+
+var results = connection.Query<AdjacentType>(mapping);
+```
+
+Note that for value tuples, the ordering of the columns is what's used and not the names of the individual tuple elements. (C# does not compile this information into your code)
+
+### Advanced Expressions
+
+For more advanced expressions, you can use the `connection.Table<T>()` query. Certain methods are translated to SQL, such as `.Where()`, `.OrderBy()`, `.Take()`, and `.Skip()`:
+
+```csharp
+var results = connection.Table<Product>()
     .Where(x => x.Price > 10 && x.Name.StartsWith("W"))
     .OrderBy(x => x.Name)
     .Skip(5)
@@ -178,152 +227,15 @@ var results = db.Table<Product>()
     .ToList();
 
 // Count without loading all rows
-int c = db.Table<Product>().Count(x => x.Price > 10);
+int c = connection.Table<Product>().Count(x => x.Price > 10);
 
 // Single row lookups
-var first = db.Table<Product>().FirstOrDefault(x => x.Name == "Widget");
+var first = connection.Table<Product>().FirstOrDefault(x => x.Name == "Widget");
 ```
 
-### Raw SQL Queries
+## Table creation & migration
 
-Use `Query<T>()` for arbitrary SQL with parameter binding:
-
-```csharp
-var rows = db.Query<Product>("SELECT * FROM Product WHERE Price > ?", 20.0m);
-```
-
-For deferred (lazy) enumeration that streams rows without loading them all into memory, use `DeferredQuery<T>()`. The connection must stay open while iterating:
-
-```csharp
-foreach (var row in db.DeferredQuery<Product>("SELECT * FROM Product"))
-{
-    Console.WriteLine(row.Name);
-}
-```
-
-### ValueTuple Query Results
-
-`Query<T>` and `DeferredQuery<T>` support named ValueTuples as the result type, making ad-hoc queries concise:
-
-```csharp
-var summaries = db.Query<(string Name, decimal TotalPrice)>(
-    "SELECT Name, Price * 1.2 AS TotalPrice FROM Product WHERE Price > ?", 5m);
-
-foreach (var (name, total) in summaries)
-{
-    Console.WriteLine($"{name}: {total:C}");
-}
-```
-
-ValueTuples with up to 7 elements are supported.
-
-### Composite Primary Keys
-
-Mark multiple properties with `[PrimaryKey]` and set the `Order` property to define column ordering:
-
-```csharp
-public class OrderLine
-{
-    [PrimaryKey, Order = 0]
-    public int OrderId { get; set; }
-
-    [PrimaryKey, Order = 1]
-    public int ProductId { get; set; }
-
-    public int Quantity { get; set; }
-}
-```
-
-Composite primary key tables cannot use `[AutoIncrement]`. Delete by composite key passes the key values in order:
-
-```csharp
-db.Delete<OrderLine>(orderId, productId);
-```
-
-### Nullable Reference Types
-
-In nullable-enabled projects, NOT NULL constraints are inferred from the property type:
-
-```csharp
-public class Item
-{
-    [PrimaryKey]
-    public int Id { get; set; }       // NOT NULL (value type)
-
-    public string Name { get; set; }  // NOT NULL (non-nullable ref type)
-
-    public string? Description { get; set; } // NULLABLE (nullable ref type)
-}
-```
-
-Use `CreateFlags.ImplicitNullable` to override this and treat all columns as nullable unless explicitly marked `[NotNull]`.
-
-### Transactions
-
-Wrap multiple operations in a transaction for atomicity:
-
-```csharp
-db.RunInTransaction(() =>
-{
-    db.Insert(new Product { Name = "A", Price = 1m });
-    db.Insert(new Product { Name = "B", Price = 2m });
-});
-```
-
-If an exception is thrown inside the callback, the transaction rolls back automatically. For manual control:
-
-```csharp
-db.BeginTransaction();
-try
-{
-    // ... operations ...
-    db.Commit();
-}
-catch
-{
-    db.Rollback();
-    throw;
-}
-```
-
-### Creating Multiple Tables at Once
-
-Use `CreateTables<T1, T2, ...>()` to create several tables in one call:
-
-```csharp
-db.CreateTables<Product, Order, OrderLine>();
-```
-
-### Drop and Migrate
-
-```csharp
-// Drop a table entirely
-db.DropTable<Product>();
-
-// Create or update the schema (adds new columns, keeps existing data)
-var result = db.CreateTable<Product>();
-// result.Changes contains: 1=new table, 2=table altered, 0=nothing changed
-```
-
-### Connection Options
-
-The `SQLiteConnectionString` class gives full control over connection behavior:
-
-```csharp
-var opts = new SQLiteConnectionString("my_database.db")
-{
-    OpenFlags = SQLiteOpenFlags.ReadWrite | SQLiteOpenFlags.Create,
-};
-using var db = new SQLiteConnection(opts);
-```
-
-For an in-memory database, pass `":memory:"` as the path:
-
-```csharp
-using var db = new SQLiteConnection(":memory:");
-```
-
-## Column Attribute Reference
+`connection.CreateTable<T>()` will create a table using the specific type as a reference. Only public properties will be considered as columns. Use the table below as a reference to what attributes are available to decorate members with:
 
 | Attribute                                                | Target   | Description                                                                                                                                                                              |
 | -------------------------------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -334,7 +246,6 @@ using var db = new SQLiteConnection(":memory:");
 | `[Indexed]` / `[Indexed("Name", order)]`                 | Property | Creates an index. Shared `Name` values group columns into a single multi-column index; `order` defines column position.                                                                  |
 | `[Unique]`                                               | Property | Like `[Indexed]` but creates a UNIQUE constraint.                                                                                                                                        |
 | `[Ignore]`                                               | Property | Excludes the property from the table mapping.                                                                                                                                            |
-| `[MaxLength(n)]`                                         | Property | Adds a CHECK constraint for maximum string length.                                                                                                                                       |
 | `[Collation("NOCASE")]`                                  | Property | Sets the column collation (`BINARY`, `NOCASE`, or `RTRIM`).                                                                                                                              |
 | `[NotNull]`                                              | Property | Enforces NOT NULL explicitly (usually inferred from nullable context).                                                                                                                   |
 | `[StoreAsText]` / `[StoreAsText(Format = "yyyy-MM-dd")]` | Property | Stores the value as text instead of its native type. Useful for `DateTimeOffset`, `DateOnly`, custom formatting, or enums stored per-property.                                           |
@@ -364,6 +275,33 @@ public class Product
     public string ComputedDisplay => $"{Name} ({Price:C})";
 }
 ```
+
+#### Migration
+
+`CreateTable<T>()` not only creates tables, but also handles a limited amount of migration if the schema differs.
+
+It is however extremely limited; it only supports adding new columns to existing tables, which always get placed at the end. Modifying or removing existing columns will not transfer those changes to the table.
+
+Due to limitations with SQLite, you also cannot mark new columns as primary keys or append them to composite primary key definitions. 
+
+#### Nullable Reference Types
+
+In nullable-enabled projects, NOT NULL constraints are inferred from the property type:
+
+```csharp
+public class Item
+{
+    [PrimaryKey]
+    public int Id { get; set; }       // NOT NULL (value type)
+
+    public string Name { get; set; }  // NOT NULL (non-nullable ref type)
+
+    public string? Description { get; set; } // NULLABLE (nullable ref type)
+}
+
+```
+
+Use `CreateFlags.ImplicitNullable` to disable this inference and treat all reference values as nullable. Alternatively, any columns explicitly marked with `[NotNull]` will always be treated as non-nullable.
 
 ## License
 
