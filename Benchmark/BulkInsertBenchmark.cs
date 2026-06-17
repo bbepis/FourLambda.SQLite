@@ -1,4 +1,7 @@
 ﻿using BenchmarkDotNet.Attributes;
+using LinqToDB;
+using LinqToDB.Data;
+using LinqToDB.DataProvider.SQLite;
 
 namespace Benchmark;
 
@@ -8,32 +11,44 @@ public class BulkInsertBenchmark
 	private static readonly BenchmarkItem[] array = InsertionHelper.GenerateItems().ToArray();
 
 	[Benchmark(Baseline = true)]
-	public void BulkInsert_SqliteNet()
+	public void BulkInsert500k_SqliteNet()
 	{
 		using var connection = InsertionHelper.Insert_SqliteNet(array);
 	}
 
 	[Benchmark]
-	public void BulkInsert_FourLambda()
+	public void BulkInsert500k_FourLambda()
 	{
 		using var connection = InsertionHelper.Insert_FourLambda(array);
 	}
 
 	[Benchmark]
-	public void BulkInsert_Microsoft()
+	public void BulkInsert500k_MicrosoftDataSqlite()
 	{
 		using var connection = InsertionHelper.Insert_Microsoft(array);
 	}
+
+	[Benchmark]
+	public void BulkInsert500k_Linq2Db()
+	{
+		var (db, context) = InsertionHelper.Insert_Linq2Db(array);
+
+		db.Dispose();
+		context.Dispose();
+	}
 }
 
-
+[LinqToDB.Mapping.Table]
 public class BenchmarkItem
 {
-	[SQLite.PrimaryKey, FourLambda.SQLite.PrimaryKey]
+	[SQLite.PrimaryKey, FourLambda.SQLite.PrimaryKey, LinqToDB.Mapping.PrimaryKey]
 	public int ID { get; set; }
 
+	[LinqToDB.Mapping.Column("Value"), LinqToDB.Mapping.NotNull]
 	public int Value { get; set; }
+	[LinqToDB.Mapping.Column("StringValue"), LinqToDB.Mapping.NotNull]
 	public string StringValue { get; set; }
+	[LinqToDB.Mapping.Column("EnumValue"), LinqToDB.Mapping.NotNull]
 	public TestEnum EnumValue { get; set; }
 }
 
@@ -137,5 +152,33 @@ EnumValue) VALUES ($aaaa, $bbbb, $cccc, $dddd)";
 		}
 
 		return connection;
+	}
+
+	public static (DataConnection, Microsoft.Data.Sqlite.SqliteConnection) Insert_Linq2Db(IEnumerable<BenchmarkItem>? items = null)
+	{
+		SQLitePCL.raw.SetProvider(new SQLitePCL.SQLite3Provider_e_sqlite3());
+
+		var connection = new Microsoft.Data.Sqlite.SqliteConnection("Data Source=:memory:");
+		connection.Open();
+
+		using var command = connection.CreateCommand();
+		command.CommandText = @"CREATE TABLE IF NOT EXISTS ""BenchmarkItem"" (
+""ID"" INTEGER not null,
+""Value"" INTEGER not null default 0,
+""StringValue"" TEXT not null,
+""EnumValue"" INTEGER not null default 0,
+PRIMARY KEY (ID)
+)";
+		command.ExecuteNonQuery();
+
+		var dbOptions = new DataOptions()
+			.UseConnection(connection)
+			.UseSQLite(SQLiteProvider.Microsoft);
+
+		var db = new DataConnection(dbOptions);
+
+		db.BulkCopy(items);
+
+		return (db, connection);
 	}
 }
