@@ -217,7 +217,7 @@ public class SQLiteDataReader : DbDataReader, IDataRecord
 		};
 	}
 
-	private T SafeReadFromStatement<T>(int ordinal, StatementGetter<T> statementGetter)
+	private T SafeReadFromStatement<T>(int ordinal, StatementGetterFunc<T> statementGetter)
 	{
 		OrdinalCheck(ordinal);
 
@@ -345,6 +345,6 @@ public class SQLiteDataReader : DbDataReader, IDataRecord
 
 	private static class GenericConverterCache<T>
 	{
-		public static readonly StatementGetter<T> Getter = GetConverterDefinition<T>().StatementGetter;
+		public static readonly StatementGetterFunc<T> Getter = GetConverterDefinition<T>().StatementGetter;
 	}
 }

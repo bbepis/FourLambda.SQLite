@@ -304,6 +304,41 @@ public class Item
 
 Use `CreateFlags.ImplicitNullable` to disable this inference and treat all reference values as nullable. Alternatively, any columns explicitly marked with `[NotNull]` will always be treated as non-nullable.
 
+### Custom Scalar Types
+
+You can register custom type converters using `ValueConverter.AddConverter<T>()`. Note that this requires working with the low-level `SQLite3Native` functions.
+
+After registering, the type is able to be used as a column type, and as a scalar type when reading with `Query<T>()` and `ExecuteScalar<T>()`.
+
+Converters are registered globally and persist for the lifetime of the application. Existing converters can be replaced with `AddConverter<T>()`, including base types, so take care to not break too much.
+
+For structs and value types, the library automatically handles `Nullable<T>` wrapping, so you only need to register a converter for the underlying type.
+
+Here is an example that registers `MyCustomType` as a scalar type.
+
+```csharp
+using FourLambda.SQLite;
+
+// Register a converter for a custom type
+ValueConverter.AddConverter<MyCustomType>(
+    // Getter: reads a value from a statement column
+    getter: (statement, index, column, colType) =>
+    {
+        var text = SQLite3Native.ColumnString(statement, index);
+        return MyCustomType.Parse(text);
+    },
+    // Setter: binds a value to a statement parameter
+    setter: (statement, index, column, value) =>
+    {
+        SQLite3Native.BindText(statement, index, value.ToString(), -1, -1);
+    },
+    // Cell type: determines the SQLite storage type for columns of this converter
+    cellType: _ => SqliteCellType.Text
+);
+```
+
+See the tests or base type implementations for more examples.
+
 ## License
 
 Distributed under the MIT License, original version authored by `Krueger Systems, Inc.`. See `LICENSE.txt` for more information.
