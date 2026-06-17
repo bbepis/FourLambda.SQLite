@@ -1,4 +1,21 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<PackageId>FourLambda.Sqlite</PackageId>
+		<Description>Ultra-high performance SQLite ORM</Description>
+		<Version>1.0.0</Version>
+		<Authors>Bepis, Four Lambda Software</Authors>
+		<Company>FourLambda</Company>
+		<GenerateDocumentationFile>true</GenerateDocumentationFile>
+
+		<RepositoryUrl>https://github.com/bbepis/FourLambda.Sqlite</RepositoryUrl>
+		<RepositoryType>git</RepositoryType>
+		<PublishRepositoryUrl>true</PublishRepositoryUrl>
+
+		<PackageTags>sqlite;sql;orm;datareader;database;performance</PackageTags>
+		<PackageReadmeFile>nugetreadme.md</PackageReadmeFile>
+		<PackageIcon>logo.png</PackageIcon>
+		<PackageLicenseExpression>MIT</PackageLicenseExpression>
+	</PropertyGroup>
 
   <PropertyGroup>
     <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
@@ -10,5 +27,10 @@
   <ItemGroup>
     <PackageReference Include="SourceGear.sqlite3" Version="3.50.4.5" />
   </ItemGroup>
+
+	<ItemGroup>
+		<None Include="../nugetreadme.md" Pack="true" PackagePath=""/>
+		<None Include="../logo.png" Pack="true" PackagePath=""/>
+	</ItemGroup>
 
 </Project>
