@@ -10,14 +10,6 @@
     <br />
     Forked from <a href="https://github.com/praeclarum/sqlite-net">https://github.com/praeclarum/sqlite-net</a>
     <br />
-    <a href="https://github.com/othneildrew/Best-README-Template"><strong>Get started »</strong></a>
-    <br />
-    <br />
-    <a href="https://github.com/othneildrew/Best-README-Template">View Demo</a>
-    &middot;
-    <a href="https://github.com/othneildrew/Best-README-Template/issues/new?labels=bug&template=bug-report---.md">Report Bug</a>
-    &middot;
-    <a href="https://github.com/othneildrew/Best-README-Template/issues/new?labels=enhancement&template=feature-request---.md">Request Feature</a>
   </p>
 </div>
 
@@ -32,7 +24,7 @@
 
 This fork exists because I have been hitting my head on some longstanding issues in the original package. Since they require very large architectural changes and the original project has been more or less dead for a while, I figured they would be very unlikely to get merged in.
 
-I created this fork for my own personal use, but decided to clean it up and release it for others to use.
+I created this fork for my own personal use, but decided to clean it up and release it for others to use as well. Note that I haven't done a lot of testing with an AOT environment, so it might not fully work with it!
 
 Like the upstream version, this package has a lot of benefits:
 
@@ -42,7 +34,7 @@ Like the upstream version, this package has a lot of benefits:
 This fork also includes a lot of added features and fixed issues:
 
 - Massive performance and allocation improvements
-- Fixes executing SQL that contains unicode text [[#226](https://github.com/praeclarum/sqlite-net/issues/226)] [[#1162](https://github.com/praeclarum/sqlite-net/issues/1162)] [[#215](https://github.com/praeclarum/sqlite-net/issues/215)]
+- Fix for executing SQL that contains unicode text [[#226](https://github.com/praeclarum/sqlite-net/issues/226)] [[#1162](https://github.com/praeclarum/sqlite-net/issues/1162)] [[#215](https://github.com/praeclarum/sqlite-net/issues/215)]
 - Up-to-date sqlite3 binaries [[#1297](https://github.com/praeclarum/sqlite-net/issues/1297)] [[#1282](https://github.com/praeclarum/sqlite-net/issues/1282)] [[#1288](https://github.com/praeclarum/sqlite-net/issues/1288)]
 - Support for composite / multiple column primary keys [[#280](https://github.com/praeclarum/sqlite-net/issues/280)] [[#642](https://github.com/praeclarum/sqlite-net/issues/642)] [[#1101](https://github.com/praeclarum/sqlite-net/issues/1101)]
 - Per-column string conversion definitions instead of a rigid global conversion ruleset [[#360](https://github.com/praeclarum/sqlite-net/issues/360)]
@@ -234,7 +226,7 @@ int c = connection.Table<Product>().Count(x => x.Price > 10);
 var first = connection.Table<Product>().FirstOrDefault(x => x.Name == "Widget");
 ```
 
-## Table creation & migration
+### Table creation & migration
 
 `connection.CreateTable<T>()` will create a table using the specific type as a reference. Only public properties will be considered as columns. Use the table below as a reference to what attributes are available to decorate members with:
 
