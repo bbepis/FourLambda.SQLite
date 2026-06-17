@@ -99,9 +99,9 @@ As compared to the upstream `sqlite-pcl` package:
 - Query/QueryScalars/DeferredQuery have been merged into just Query<T>(). If you want to get an IEnumerable of scalars, just pass the scalar type to Query
 - `RunInTransaction` has been removed in favor of `CreateTransactionScope`, which mimics ITransactionScope from EF.Core
 - Scalar support for `Uri`, `StringBuilder` and `UriBuilder` have been removed. If you need them back, you can add your own custom serialization definitions
+- `decimal` values are now stored as text to prevent precision loss. They are still able to be loaded from the database if they are stored as floats or integers, however
 
 
-<!-- GETTING STARTED -->
 ## Getting Started
 
 Install the package via NuGet:

@@ -1,6 +1,5 @@
 using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
-using static FourLambda.SQLite.ValueConverter;
 
 namespace FourLambda.SQLite;
 
@@ -349,9 +348,17 @@ public static class ValueConverter
 
 		AddConverter(new StructConverterDefinition<decimal>
 		{
-			StatementGetter = static (statement, index, column, colType) => (decimal)SQLite3Native.ColumnDouble(statement, index),
-			StatementSetter = static (statement, index, column, value) => SQLite3Native.BindDouble(statement, index, (double)value),
-			DetermineCellType = static _ => SqliteCellType.Real
+			StatementGetter = static (statement, index, column, colType) =>
+			{
+				return colType switch
+				{
+					SQLite3Native.ColType.Integer => (decimal)SQLite3Native.ColumnInt64(statement, index),
+					SQLite3Native.ColType.Real => (decimal)SQLite3Native.ColumnDouble(statement, index),
+					_ => decimal.Parse(SQLite3Native.ColumnString(statement, index))
+				};
+			},
+			StatementSetter = static (statement, index, column, value) => SQLite3Native.BindText(statement, index, value.ToString(CultureInfo.InvariantCulture), -1, -1),
+			DetermineCellType = static _ => SqliteCellType.Text
 		});
 
 		AddConverter(new StructConverterDefinition<byte>
