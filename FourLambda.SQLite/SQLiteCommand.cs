@@ -2,12 +2,20 @@ using System.Runtime.CompilerServices;
 
 namespace FourLambda.SQLite;
 
+/// <summary>
+/// Represents a SQL command to be executed against a SQLite database, supporting parameter binding and query execution.
+/// </summary>
 public class SQLiteCommand(SQLiteConnection conn)
 {
 	private readonly List<Binding> _bindings = new();
 
+	/// <summary>The SQL text of the command to execute.</summary>
 	public string CommandText { get; set; } = "";
 
+	/// <summary>Executes a non-query SQL statement (INSERT, UPDATE, DELETE) and returns the number of rows affected.</summary>
+	/// <returns>The number of rows modified by the command.</returns>
+	/// <exception cref="SQLiteException">Thrown on database errors or unexpected result codes.</exception>
+	/// <exception cref="NotNullConstraintViolationException">Thrown when a NOT NULL constraint is violated.</exception>
 	public int ExecuteNonQuery()
 	{
 		conn.Tracer?.Invoke("Executing: " + this);
@@ -48,6 +56,12 @@ public class SQLiteCommand(SQLiteConnection conn)
 
 		return new SQLiteDataReader(Prepare());
 	}
+
+	/// <summary>Executes the command and returns the value of the first column of the first row, or <c>default(T)</c> if no rows are returned.</summary>
+	/// <typeparam name="T">The type to convert the scalar value to. Must have a registered <see cref="ValueConverter"/> definition.</typeparam>
+	/// <returns>The scalar value from column 0 of the first row, or <c>default(T)</c> if the query returns no rows.</returns>
+	/// <exception cref="NotSupportedException">Thrown when no converter exists for type <typeparamref name="T"/>.</exception>
+	/// <exception cref="SQLiteException">Thrown on database errors.</exception>
 	public T? ExecuteScalar<T>()
 	{
 		conn.Tracer?.Invoke("Executing Query: " + this);
@@ -89,7 +103,7 @@ public class SQLiteCommand(SQLiteConnection conn)
 	/// Executes the statement held by this command, and returns the data fetched by the command.
 	/// </summary>
 	/// <typeparam name="T">
-	///	The type to load data into. This can be of three category of types:<br/>
+	///	The type to load data into. This can be one of three categories of types:<br/>
 	/// - A regular class/struct that contains column definitions as properties.<br/>
 	/// - A <see cref="ValueTuple"/> with up to 7 arguments. Note that the values are loaded positionally and not by name; make sure the positions of the values match up with the statement.<br/>
 	/// - A scalar type (e.g. string, int). The value in the first column is parsed as this scalar type and returned.
@@ -357,6 +371,9 @@ public class SQLiteCommand(SQLiteConnection conn)
 		}
 	}
 
+	/// <summary>Binds a named parameter value to the command.</summary>
+	/// <param name="name">The parameter name (e.g., "@id" or ":id").</param>
+	/// <param name="val">The value to bind. Pass <c>null</c> for SQL NULL.</param>
 	public void Bind(string name, object val)
 	{
 		_bindings.Add(new Binding
@@ -366,6 +383,8 @@ public class SQLiteCommand(SQLiteConnection conn)
 		});
 	}
 
+	/// <summary>Binds an unnamed (positional) parameter value to the command, matched in binding order.</summary>
+	/// <param name="val">The value to bind. Pass <c>null</c> for SQL NULL.</param>
 	public void Bind(object val)
 	{
 		Bind(null, val);
@@ -434,6 +453,8 @@ public class SQLiteCommand(SQLiteConnection conn)
 		public int Index { get; set; }
 	}
 
+	/// <summary>Returns a string representation showing the SQL text and all bound parameter values.</summary>
+	/// <returns>A formatted string with the command text followed by each binding on its own line.</returns>
 	public override string ToString()
 	{
 		var builder = new StringBuilder(CommandText);
@@ -451,9 +472,7 @@ internal interface IPreparedCommand : IDisposable
 	int BindAndExecuteBoxed(object source);
 }
 
-/// <summary>
-/// Since the insert never changed, we only need to prepare once.
-/// </summary>
+/// <summary>A pre-prepared INSERT command that prepares the SQLite statement once and reuses it across executions. Thread-safe via locking.</summary>
 internal class PreparedInsertCommand<TRowObject>(SQLiteConnection connection, string commandText, TableColumn[] columns) : IPreparedCommand
 {
 	private bool Initialized;

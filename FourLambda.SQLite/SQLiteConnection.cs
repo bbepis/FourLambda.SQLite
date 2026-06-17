@@ -1,4 +1,3 @@
-using System.Data;
 using System.Diagnostics;
 using System.Linq.Expressions;
 using System.Runtime.CompilerServices;
@@ -9,22 +8,53 @@ using System.Runtime.CompilerServices;
 
 namespace FourLambda.SQLite;
 
+/// <summary>
+/// Flags that control how a SQLite database connection is opened.
+/// <br/> See <see href="https://sqlite.org/c3ref/open.html" />
+/// </summary>
 [Flags]
 public enum SQLiteOpenFlags
 {
-	ReadOnly = 1,
-	ReadWrite = 2,
-	Create = 4,
-	Uri = 0x40,
-	Memory = 0x80,
-	NoMutex = 0x8000,
-	FullMutex = 0x10000,
-	SharedCache = 0x20000,
-	PrivateCache = 0x40000,
-	ProtectionComplete = 0x00100000,
-	ProtectionCompleteUnlessOpen = 0x00200000,
-	ProtectionCompleteUntilFirstUserAuthentication = 0x00300000,
-	ProtectionNone = 0x00400000
+	/// <summary>
+	/// The database is opened in read-only mode. If the database does not already exist, an error is returned.
+	/// </summary>
+	ReadOnly = 0x00000001,
+	/// <summary>
+	/// The database is opened for reading and writing if possible, or reading only if the file is write protected by the operating system. In either case the database must already exist, otherwise an error is returned. For historical reasons, if opening in read-write mode fails due to OS-level permissions, an attempt is made to open it in read-only mode.
+	/// </summary>
+	ReadWrite = 0x00000002,
+	/// <summary>
+	/// The database is opened for reading and writing, and is created if it does not already exist.
+	/// </summary>
+	Create = 0x00000004,
+	/// <summary>
+	/// The filename can be interpreted as a URI if this flag is set.
+	/// </summary>
+	Uri = 0x00000040,
+	/// <summary>
+	/// The database will be opened as an in-memory database. The database is named by the "filename" argument for the purposes of cache-sharing, if shared cache mode is enabled, but the "filename" is otherwise ignored.
+	/// </summary>
+	Memory = 0x00000080,
+	/// <summary>
+	/// The new database connection will use the "multi-thread" threading mode. This means that separate threads are allowed to use SQLite at the same time, as long as each thread is using a different database connection.
+	/// </summary>
+	NoMutex = 0x00008000,
+	/// <summary>
+	/// The new database connection will use the "serialized" threading mode. This means the multiple threads can safely attempt to use the same database connection at the same time. (Mutexes will block any actual concurrency, but in this mode there is no harm in trying.)
+	/// </summary>
+	FullMutex = 0x00010000,
+	/// <summary>
+	/// The database is opened with shared cache enabled, overriding the default shared cache setting provided by sqlite3_enable_shared_cache(). The use of shared cache mode is discouraged and hence shared cache capabilities may be omitted from many builds of SQLite. In such cases, this option is a no-op.
+	/// </summary>
+	SharedCache = 0x00020000,
+	/// <summary>
+	/// The database is opened with shared cache disabled, overriding the default shared cache setting provided by sqlite3_enable_shared_cache().
+	/// </summary>
+	PrivateCache = 0x00040000,
+	/// <summary>
+	/// The database filename is not allowed to contain a symbolic link.
+	/// </summary>
+	NoFollow = 0x01000000
 }
 
 [Flags]
@@ -73,6 +103,9 @@ public class SQLiteConnection : IDisposable
 	static readonly Sqlite3DatabaseHandle NullHandle = IntPtr.Zero;
 	static readonly Sqlite3BackupHandle NullBackupHandle = IntPtr.Zero;
 
+	/// <summary>
+	/// Gets the native SQLite database handle.
+	/// </summary>
 	public Sqlite3DatabaseHandle Handle { get; private set; }
 
 	/// <summary>
@@ -188,14 +221,21 @@ public class SQLiteConnection : IDisposable
 #endif
 	}
 
+	/// <summary>
+	/// Sets a debug logger that receives trace output for each SQL command executed on this connection.
+	/// </summary>
+	/// <param name="logger">
+	/// The action to invoke with trace messages, or null to disable tracing.
+	/// </param>
 	public void SetDebugLogger(Action<string>? logger)
 	{
 		Tracer = logger;
 	}
 
 	/// <summary>
-	/// Enable or disable extension loading.
+	/// Enables or disables the SQLite extension loading mechanism.
 	/// </summary>
+	/// <param name="enabled">True to enable extension loading; false to disable it.</param>
 	public void EnableLoadExtension(bool enabled)
 	{
 		SQLite3Native.Result r = SQLite3Native.EnableLoadExtension(Handle, enabled ? 1 : 0);
@@ -226,7 +266,8 @@ public class SQLiteConnection : IDisposable
 	}
 
 	/// <summary>
-	/// Convert an input string to a quoted SQL string that can be safely used in queries.
+	/// Converts an input string to a quoted SQL string that can be safely used in queries.
+	/// <br/> Returns "NULL" for null input.
 	/// </summary>
 	/// <param name="unsafeString">The string to quote, or null.</param>
 	/// <returns>The quoted string safe for embedding in SQL.</returns>
@@ -435,19 +476,19 @@ public class SQLiteConnection : IDisposable
 	}
 
 	/// <summary>
-	/// Rolls back the savepoint created by <see cref="BeginTransaction"/> or SaveTransactionPoint.
+	/// Rolls back the savepoint created by <see cref="SaveTransactionPoint"/>.
 	/// </summary>
-	/// <param name="savepoint">The name of the savepoint to roll back to, as returned by <see cref="SaveTransactionPoint"/>.  If savepoint is null or empty, this method is equivalent to a call to <see cref="Rollback"/></param>
+	/// <param name="savepoint">The name of the savepoint to roll back to, as returned by <see cref="SaveTransactionPoint"/>. If savepoint is null or empty, this method is equivalent to a call to <see cref="Rollback"/>.</param>
 	public void RollbackTo(string savepoint)
 	{
 		RollbackTo(savepoint, false);
 	}
 
 	/// <summary>
-	/// Rolls back the transaction that was begun by <see cref="BeginTransaction"/>.
+	/// Rolls back the transaction that was begun by <see cref="BeginTransaction"/>, or rolls back to a specific savepoint.
 	/// </summary>
-	/// <param name="savepoint">The name of the savepoint to roll back to, as returned by <see cref="SaveTransactionPoint"/>.  If savepoint is null or empty, this method is equivalent to a call to <see cref="Rollback"/></param>
-	/// <param name="noThrow">true to avoid throwing exceptions, false otherwise</param>
+	/// <param name="savepoint">The name of the savepoint to roll back to, as returned by <see cref="SaveTransactionPoint"/>. If savepoint is null or empty, this method is equivalent to a call to <see cref="Rollback"/>.</param>
+	/// <param name="noThrow">True to suppress exceptions; false to rethrow them.</param>
 	void RollbackTo(string? savepoint, bool noThrow)
 	{
 		// Rolling back without a TO clause rolls backs all transactions
@@ -660,11 +701,11 @@ public class SQLiteConnection : IDisposable
 	}
 
 	/// <summary>
-	/// Query the built-in sqlite table_info table for a specific tables columns.
+	/// Queries the built-in SQLite <c>pragma_table_info</c> for a specific table's columns.
 	/// </summary>
-	/// <returns>The columns contained in the table.</returns>
-	/// <param name="tableName">Table name.</param>
-	public List<ColumnDefinition> GetTableInfo(string tableName)
+	/// <param name="tableName">Name of the table to inspect.</param>
+	/// <returns>The column definitions contained in the table, or an empty list if the table does not exist.</returns>
+	public ColumnDefinition[] GetTableInfo(string tableName)
 	{
 		var query = $"SELECT name, \"notnull\" FROM pragma_table_info({EscapeAndQuote(tableName)})";
 		return Query<(string name, int notnull)>(query)
@@ -673,12 +714,14 @@ public class SQLiteConnection : IDisposable
 				{
 					IsNullable = x.notnull == 0
 				})
-			.ToList();
+			.ToArray();
 	}
 
 	/// <summary>
 	/// Returns a queryable interface to the table represented by the given type.
+	/// The table mapping is automatically generated via <see cref="GetMapping"/>.
 	/// </summary>
+	/// <typeparam name="T">The type that maps to the database table.</typeparam>
 	/// <returns>
 	/// A queryable object that is able to translate Where, OrderBy, and Take
 	/// queries into native SQL.
@@ -691,8 +734,10 @@ public class SQLiteConnection : IDisposable
 	}
 
 	/// <summary>
-	/// Returns a queryable interface to the table represented by the given type.
+	/// Returns a queryable interface to the table represented by the given type, using a custom mapping.
 	/// </summary>
+	/// <typeparam name="T">The type that maps to the database table.</typeparam>
+	/// <param name="map">A <see cref="TableMapping"/> to use for querying the table.</param>
 	/// <returns>
 	/// A queryable object that is able to translate Where, OrderBy, and Take
 	/// queries into native SQL.
@@ -704,9 +749,14 @@ public class SQLiteConnection : IDisposable
 		return new TableQuery<T>(this, map);
 	}
 
+	/// <summary>
+	/// Indicates the result of a table creation or migration operation.
+	/// </summary>
 	public enum CreateTableResult
 	{
+		/// <summary>The table was newly created.</summary>
 		Created,
+		/// <summary>The table already existed and was migrated to match the new schema.</summary>
 		Migrated,
 	}
 
@@ -714,6 +764,8 @@ public class SQLiteConnection : IDisposable
 	/// Executes a "create table if not exists" on the database using the specified type, including any constraints or indexes.
 	/// Mapping is automatically generated via <see cref="GetMapping"/>.
 	/// </summary>
+	/// <typeparam name="T">The type to reflect to a database table.</typeparam>
+	/// <param name="createFlags">Optional flags allowing implicit PK and indexes based on naming conventions.</param>
 	/// <returns>
 	/// Whether the table was created or migrated.
 	/// </returns>
@@ -877,12 +929,12 @@ public class SQLiteConnection : IDisposable
 	}
 
 	/// <summary>
-	/// Executes a "create table if not exists" on the database using the specified type, including any constraints or indexes.
-	/// Mapping is automatically generated via <see cref="GetMapping"/>.
+	/// Executes a "create table if not exists" for each of the specified types, including any constraints or indexes.
+	/// Mappings are automatically generated via <see cref="GetMapping"/>.
 	/// </summary>
-	/// <returns>
-	/// Whether the table was created or migrated for each type.
-	/// </returns>
+	/// <param name="createFlags">Optional flags allowing implicit PK and indexes based on naming conventions.</param>
+	/// <param name="types">The types to reflect to database tables.</param>
+	/// <returns>A dictionary mapping each type to whether its table was created or migrated.</returns>
 	[RequiresUnreferencedCode("This method requires 'DynamicallyAccessedMemberTypes.All' on each input 'Type' instance.")]
 	public Dictionary<Type, CreateTableResult> CreateTables(TableCreateFlags createFlags = TableCreateFlags.None, params Type[] types)
 	{
@@ -896,12 +948,10 @@ public class SQLiteConnection : IDisposable
 	}
 
 	/// <summary>
-	/// Executes a "create table if not exists" on the database using the specified type, including any constraints or indexes.
-	/// Mapping is automatically generated via <see cref="GetMapping"/>.
+	/// Executes a "create table if not exists" for each of the specified table mappings, including any constraints or indexes.
 	/// </summary>
-	/// <returns>
-	/// Whether the table was created or migrated for each type.
-	/// </returns>
+	/// <param name="mappings">The table mappings to create tables from.</param>
+	/// <returns>A dictionary mapping each table mapping to whether its table was created or migrated.</returns>
 	public Dictionary<TableMapping, CreateTableResult> CreateTables(params TableMapping[] mappings)
 	{
 		var results = new Dictionary<TableMapping, CreateTableResult>();
@@ -915,8 +965,9 @@ public class SQLiteConnection : IDisposable
 
 
 	/// <summary>
-	/// Executes a "drop table" on the table associated with the object. This is irreversible.
+	/// Executes a "drop table" on the table associated with the given type. This is irreversible.
 	/// </summary>
+	/// <typeparam name="T">The type that maps to the database table to drop.</typeparam>
 	public int DropTable<
 		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
 		T>()
@@ -937,12 +988,11 @@ public class SQLiteConnection : IDisposable
 	#region Index
 
 	/// <summary>
-	/// Creates an index for the specified object property.
-	/// e.g. CreateIndex&lt;Client&gt;(c => c.Name);
+	/// Creates an index for the specified table and column using a property expression.
 	/// </summary>
-	/// <typeparam name="T">Type to reflect to a database table.</typeparam>
-	/// <param name="property">Property to index.</param>
-	/// <param name="indexName">The name of the index.</param>
+	/// <typeparam name="T">The type that maps to the database table.</typeparam>
+	/// <param name="property">Expression identifying the property to index, e.g., <c>c => c.Name</c>.</param>
+	/// <param name="indexName">The name of the index. If not provided, a name is generated automatically.</param>
 	/// <param name="unique">Whether the index should be unique.</param>
 	/// <returns>Zero on success.</returns>
 	public int CreateIndex<
@@ -1006,17 +1056,16 @@ public class SQLiteConnection : IDisposable
 	#region Execute
 
 	/// <summary>
-	/// Creates a new SQLiteCommand given the command text with arguments. Place a '?'
-	/// in the command text for each of the arguments.
+	/// Creates a new SQLiteCommand given the command text with arguments. Use '?' to denote an argument to bind parameters to.
 	/// </summary>
 	/// <param name="cmdText">
-	/// The fully escaped SQL.
+	/// The SQL statement to execute.
 	/// </param>
 	/// <param name="parameters">
-	/// Arguments to substitute for the occurrences of '?' in the command text.
+	/// Parameters to substitute for the occurrences of '?' in the command text. Ensure that there is a supplied parameter for every argument in the statement.
 	/// </param>
 	/// <returns>
-	/// A <see cref="SQLiteCommand"/>
+	/// A <see cref="SQLiteCommand"/> loaded with the statement and parameters.
 	/// </returns>
 	public SQLiteCommand CreateCommand(string cmdText, params object[] parameters)
 	{
@@ -1033,18 +1082,18 @@ public class SQLiteConnection : IDisposable
 	}
 
 	/// <summary>
-	/// Creates a new SQLiteCommand given the command text with named arguments. Place "@abcd" or "$abcd"
-	/// in the command text for each of the arguments. "abcd" represents an alphanumeric identifier.
-	/// For example, @name, :name and $name can all be used in the query.
+	/// Creates a new SQLiteCommand given the command text with named arguments.
+	/// <br/> Place "@abcd" or "$abcd" in the command text for each of the arguments. "abcd" represents an alphanumeric identifier.
+	/// <br/> For example, @name, :name and $name can all be used in the query.
 	/// </summary>
 	/// <param name="cmdText">
-	/// The fully escaped SQL.
+	/// The SQL statement to execute.
 	/// </param>
 	/// <param name="namedParameters">
-	/// Arguments to substitute for the occurrences of "[@:$]VVV" in the command text.
+	/// Parameters to substitute any named arguments with. Ensure that there is a supplied parameter for every argument in the statement.
 	/// </param>
 	/// <returns>
-	/// A <see cref="SQLiteCommand" />
+	/// A <see cref="SQLiteCommand" /> loaded with the statement and parameters.
 	/// </returns>
 	public SQLiteCommand CreateCommand(string cmdText, Dictionary<string, object> namedParameters)
 	{
@@ -1061,18 +1110,16 @@ public class SQLiteConnection : IDisposable
 	}
 
 	/// <summary>
-	/// Creates a SQLiteCommand given the command text (SQL) with arguments. Place a '?'
-	/// in the command text for each of the arguments and then executes that command.
+	/// Executes a statement with arguments. Use '?' to denote an argument to bind parameters to.
 	/// Use this method instead of Query when you don't expect rows back. Such cases include
 	/// INSERTs, UPDATEs, and DELETEs.
-	/// You can set the Trace or TimeExecution properties of the connection
-	/// to profile execution.
+	/// You can set a debug logger via <see cref="SetDebugLogger"/> on the connection to profile execution.
 	/// </summary>
 	/// <param name="query">
-	/// The fully escaped SQL.
+	/// The SQL statement to execute.
 	/// </param>
 	/// <param name="args">
-	/// Arguments to substitute for the occurrences of '?' in the query.
+	/// Parameters to substitute for the occurrences of '?' in the command text. Ensure that there is a supplied parameter for every argument in the statement.
 	/// </param>
 	/// <returns>
 	/// The number of rows modified in the database as a result of this execution.
@@ -1100,20 +1147,19 @@ public class SQLiteConnection : IDisposable
 	}
 
 	/// <summary>
-	/// Creates a SQLiteCommand given the command text (SQL) with arguments. Place a '?'
-	/// in the command text for each of the arguments and then executes that command.
-	/// Use this method when return primitive values.
-	/// You can set the Trace or TimeExecution properties of the connection
-	/// to profile execution.
+	/// Executes a statement with arguments. Use '?' to denote an argument to bind parameters to.
+	/// Use this method when you expect a single scalar value back from the query, such as an aggregate function result.
+	/// You can set the <see cref="SetDebugLogger"/> property on the connection to profile execution.
 	/// </summary>
+	/// <typeparam name="T">The type to convert the scalar value to.</typeparam>
 	/// <param name="query">
-	/// The fully escaped SQL.
+	/// The SQL statement to execute.
 	/// </param>
 	/// <param name="args">
-	/// Arguments to substitute for the occurrences of '?' in the query.
+	/// Parameters to substitute for the occurrences of '?' in the command text. Ensure that there is a supplied parameter for every argument in the statement.
 	/// </param>
 	/// <returns>
-	/// The number of rows modified in the database as a result of this execution.
+	/// The value of the first column of the first row, or <c>default(T)</c> if no rows are returned.
 	/// </returns>
 	public T ExecuteScalar<T>(string query, params object[] args)
 	{
@@ -1141,10 +1187,10 @@ public class SQLiteConnection : IDisposable
 	/// Returns a <see cref="SQLiteDataReader"/> given the command text (SQL) with arguments. Place a '?' in the command text for each of the arguments sequentially.
 	/// </summary>
 	/// <param name="query">
-	/// The fully escaped SQL.
+	/// The SQL statement to execute.
 	/// </param>
 	/// <param name="args">
-	/// Arguments to substitute for the occurrences of '?' in the query.
+	/// Parameters to substitute for the occurrences of '?' in the command text. Ensure that there is a supplied parameter for every argument in the statement.
 	/// </param>
 	public SQLiteDataReader ExecuteReader(string query, params object[] args)
 	{
@@ -1157,10 +1203,7 @@ public class SQLiteConnection : IDisposable
 	#region Query
 
 	/// <summary>
-	/// Creates a SQLiteCommand given the command text (SQL) with arguments. Place a '?'
-	/// in the command text for each of the arguments and then executes that command.
-	/// It returns each row of the result using the mapping automatically generated for
-	/// the given type.
+	/// Queries all rows from the table associated with the given type.
 	/// </summary>
 	/// <typeparam name="T">
 	///	The type to load data into. This can be of three category of types:<br/>
@@ -1184,10 +1227,7 @@ public class SQLiteConnection : IDisposable
 	}
 
 	/// <summary>
-	/// Creates a SQLiteCommand given the command text (SQL) with arguments. Place a '?'
-	/// in the command text for each of the arguments and then executes that command.
-	/// It returns each row of the result using the mapping automatically generated for
-	/// the given type.
+	/// Queries all rows using a supplied statement and arguments, and converts them to the specified type.
 	/// </summary>
 	/// <typeparam name="T">
 	///	The type to load data into. This can be of three category of types:<br/>
@@ -1196,10 +1236,10 @@ public class SQLiteConnection : IDisposable
 	/// - A scalar type (e.g. string, int). The value in the first column is parsed as this scalar type and returned.
 	/// </typeparam>
 	/// <param name="query">
-	/// The fully escaped SQL.
+	/// The SQL statement to execute.
 	/// </param>
 	/// <param name="args">
-	/// Arguments to substitute for the occurrences of '?' in the query.
+	/// Parameters to substitute for the occurrences of '?' in the command text. Ensure that there is a supplied parameter for every argument in the statement.
 	/// </param>
 	/// <returns>
 	/// An enumerable with one result for each row returned by the query.
@@ -1216,23 +1256,18 @@ public class SQLiteConnection : IDisposable
 	}
 
 	/// <summary>
-	/// Creates a SQLiteCommand given the command text (SQL) with arguments. Place a '?'
-	/// in the command text for each of the arguments and then executes that command.
-	/// It returns each row of the result using the mapping automatically generated for
-	/// the given type.
+	/// Executes the given SQL query and returns each row mapped using a custom table mapping.
+	/// Place a '?' in the command text for each argument.
 	/// </summary>
 	/// <typeparam name="T">
 	///	The type to load data into. This type must correspond with the data type the <see cref="TableMapping"/> was constructed with, or a base type (including <see cref="object"/>).
 	/// </typeparam>
-	/// <param name="map">
-	/// A <see cref="TableMapping"/> to use to convert the resulting rows
-	/// into objects.
-	/// </param>
+	/// <param name="map">A <see cref="TableMapping"/> to use to convert the resulting rows into objects.</param>
 	/// <param name="query">
-	/// The fully escaped SQL.
+	/// The SQL statement to execute.
 	/// </param>
 	/// <param name="args">
-	/// Arguments to substitute for the occurrences of '?' in the query.
+	/// Parameters to substitute for the occurrences of '?' in the command text. Ensure that there is a supplied parameter for every argument in the statement.
 	/// </param>
 	/// <returns>
 	/// An enumerable with one result for each row returned by the query.
@@ -1249,14 +1284,10 @@ public class SQLiteConnection : IDisposable
 	}
 
 	/// <summary>
-	/// Creates a query using the table defined by the <typeparam name="T">type</typeparam>, and returns fetched data.
+	/// Creates a query using the table defined by the given type and filters it with a predicate.
 	/// </summary>
-	/// <typeparam name="T">
-	///	The type to load data into. This must be a type that can be used to build a table definition.
-	/// </typeparam>
-	/// <param name="predicate">
-	/// A predicate on which to filter rows on, as a WHERE query.
-	/// </param>
+	/// <typeparam name="T">The type that maps to the database table.</typeparam>
+	/// <param name="predicate">A predicate used to filter rows as a WHERE clause.</param>
 	/// <returns>
 	/// An enumerable with one result for each row returned by the query.
 	/// The enumerator (retrieved by calling GetEnumerator() on the result of this method)
@@ -1271,17 +1302,11 @@ public class SQLiteConnection : IDisposable
 	}
 
 	/// <summary>
-	/// Creates a query using the table defined by the <typeparam name="T">type</typeparam>, and returns fetched data.
+	/// Creates a query using the table defined by the given type and filters it with a predicate, using a custom mapping.
 	/// </summary>
-	/// <param name="map">
-	/// A <see cref="TableMapping"/> to use to convert the resulting rows into objects.
-	/// </param>
-	/// <typeparam name="T">
-	///	The type to load data into. This type must correspond with the data type the <see cref="TableMapping"/> was constructed with, or a base type (including <see cref="object"/>).
-	/// </typeparam>
-	/// <param name="predicate">
-	/// A predicate on which to filter rows on, as a WHERE query.
-	/// </param>
+	/// <typeparam name="T">The type to load data into.</typeparam>
+	/// <param name="map">A <see cref="TableMapping"/> to use to convert the resulting rows into objects.</param>
+	/// <param name="predicate">A predicate used to filter rows as a WHERE clause.</param>
 	/// <returns>
 	/// An enumerable with one result for each row returned by the query.
 	/// The enumerator (retrieved by calling GetEnumerator() on the result of this method)
@@ -1299,6 +1324,7 @@ public class SQLiteConnection : IDisposable
 	/// Attempts to retrieve an object with the given primary key from the table
 	/// associated with the specified type. Use of this method requires that the type has primary key(s) defined.
 	/// </summary>
+	/// <typeparam name="T">The type that maps to the database table.</typeparam>
 	/// <param name="primaryKey">
 	/// The primary key. Provide multiple objects for a table with a composite primary key.
 	/// </param>
@@ -1314,9 +1340,11 @@ public class SQLiteConnection : IDisposable
 	}
 
 	/// <summary>
-	/// Attempts to retrieve an object with the given primary key from the provided map.
+	/// Attempts to retrieve an object with the given primary key using a custom table mapping.
 	/// Use of this method requires that the map has primary keys defined.
 	/// </summary>
+	/// <typeparam name="T">The type to load data into.</typeparam>
+	/// <param name="map">The <see cref="TableMapping"/> used to identify the table and columns.</param>
 	/// <param name="primaryKey">
 	/// The primary key. Provide multiple objects for a table with a composite primary key.
 	/// </param>
@@ -1338,15 +1366,14 @@ public class SQLiteConnection : IDisposable
 	}
 
 	/// <summary>
-	/// Attempts to retrieve the first object that matches the predicate from the table
-	/// associated with the specified type.
+	/// Attempts to retrieve the first object that matches the predicate from the table associated with the specified type.
 	/// </summary>
+	/// <typeparam name="T">The type that maps to the database table.</typeparam>
 	/// <param name="predicate">
 	/// A predicate for which object to find.
 	/// </param>
 	/// <returns>
-	/// The object that matches the given predicate or null
-	/// if the object is not found.
+	/// The object that matches the given predicate, or <c>default(T)</c> if no object is found.
 	/// </returns>
 	public T Find<
 		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
@@ -1356,15 +1383,15 @@ public class SQLiteConnection : IDisposable
 	}
 
 	/// <summary>
-	/// Attempts to retrieve the first object that matches the predicate from the table
-	/// associated with the specified type.
+	/// Attempts to retrieve the first object that matches the predicate from the table using a custom table mapping.
 	/// </summary>
+	/// <typeparam name="T">The type to load data into.</typeparam>
+	/// <param name="map">The <see cref="TableMapping"/> used to identify the table and columns.</param>
 	/// <param name="predicate">
 	/// A predicate for which object to find.
 	/// </param>
 	/// <returns>
-	/// The object that matches the given predicate or null
-	/// if the object is not found.
+	/// The object that matches the given predicate, or <c>default(T)</c> if no object is found.
 	/// </returns>
 	public T Find<
 		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
@@ -1382,8 +1409,12 @@ public class SQLiteConnection : IDisposable
 	/// auto incremented primary key if it has one).
 	/// The return value is the number of rows added to the table.
 	/// </summary>
+	/// <typeparam name="T">The type that maps to the database table.</typeparam>
 	/// <param name="obj">
 	/// The object to insert.
+	/// </param>
+	/// <param name="conflictAction">
+	/// The conflict resolution strategy to use when a constraint violation occurs.
 	/// </param>
 	/// <returns>
 	/// The number of rows added to the table.
@@ -1401,18 +1432,17 @@ public class SQLiteConnection : IDisposable
 	}
 
 	/// <summary>
-	/// Inserts the given object (and updates its
+	/// Inserts the given object using a custom table mapping (and updates its
 	/// auto incremented primary key if it has one).
 	/// The return value is the number of rows added to the table.
 	/// </summary>
+	/// <typeparam name="T">The type that maps to the database table.</typeparam>
+	/// <param name="map">The <see cref="TableMapping"/> that defines how the object maps to database columns.</param>
 	/// <param name="item">
 	/// The object to insert.
 	/// </param>
-	/// <param name="extra">
-	/// Literal SQL code that gets placed into the command. INSERT {extra} INTO ...
-	/// </param>
-	/// <param name="objType">
-	/// The type of object to insert.
+	/// <param name="conflictAction">
+	/// The conflict resolution strategy to use when a constraint violation occurs.
 	/// </param>
 	/// <returns>
 	/// The number of rows added to the table.
@@ -1473,8 +1503,12 @@ public class SQLiteConnection : IDisposable
 	/// <summary>
 	/// Inserts all specified objects.
 	/// </summary>
+	/// <typeparam name="T">The type that maps to the database table.</typeparam>
 	/// <param name="objects">
 	/// An <see cref="IEnumerable"/> of the objects to insert.
+	/// </param>
+	/// <param name="conflictAction">
+	/// The conflict resolution strategy to use when a constraint violation occurs.
 	/// </param>
 	/// <param name="runInTransaction">
 	/// A boolean indicating if the inserts should be wrapped in a transaction.
@@ -1490,13 +1524,15 @@ public class SQLiteConnection : IDisposable
 	}
 
 	/// <summary>
-	/// Inserts all specified objects.
+	/// Inserts all specified objects using a custom table mapping.
 	/// </summary>
+	/// <typeparam name="T">The type that maps to the database table.</typeparam>
+	/// <param name="map">The <see cref="TableMapping"/> that defines how the objects map to database columns.</param>
 	/// <param name="objects">
 	/// An <see cref="IEnumerable"/> of the objects to insert.
 	/// </param>
-	/// <param name="objType">
-	/// The type of object to insert.
+	/// <param name="conflictAction">
+	/// The conflict resolution strategy to use when a constraint violation occurs.
 	/// </param>
 	/// <param name="runInTransaction">
 	/// A boolean indicating if the inserts should be wrapped in a transaction.
@@ -1625,10 +1661,10 @@ public class SQLiteConnection : IDisposable
 	#region Update
 
 	/// <summary>
-	/// Updates all of the columns of a table using the specified object
-	/// except for its primary key.
-	/// The object is required to have a primary key.
+	/// Updates all the columns of a table using the specified object, except for its primary key.
+	/// The table of the type is required to have a primary key.
 	/// </summary>
+	/// <typeparam name="T">The type that maps to the database table.</typeparam>
 	/// <param name="obj">
 	/// The object to update. It must have a primary key designated using the PrimaryKeyAttribute.
 	/// </param>
@@ -1649,15 +1685,13 @@ public class SQLiteConnection : IDisposable
 	}
 
 	/// <summary>
-	/// Updates all of the columns of a table using the specified object
-	/// except for its primary key.
-	/// The object is required to have a primary key.
+	/// Updates all the columns of a table using the specified object and custom mapping, except for its primary key.
+	/// The table mapping is required to have a primary key.
 	/// </summary>
+	/// <typeparam name="T">The type that maps to the database table.</typeparam>
+	/// <param name="map">The <see cref="TableMapping"/> that defines how the object maps to database columns.</param>
 	/// <param name="obj">
 	/// The object to update. It must have a primary key designated using the PrimaryKeyAttribute.
-	/// </param>
-	/// <param name="objType">
-	/// The type of object to insert.
 	/// </param>
 	/// <returns>
 	/// The number of rows updated.
@@ -1709,13 +1743,14 @@ public class SQLiteConnection : IDisposable
 	}
 
 	/// <summary>
-	/// Updates all specified objects.
+	/// Updates all specified objects, replacing non-primary key columns in the table associated with the type.
 	/// </summary>
+	/// <typeparam name="T">The type that maps to the database table.</typeparam>
 	/// <param name="objects">
-	/// An <see cref="IEnumerable"/> of the objects to insert.
+	/// An <see cref="IEnumerable"/> of the objects to update.
 	/// </param>
 	/// <param name="runInTransaction">
-	/// A boolean indicating if the inserts should be wrapped in a transaction
+	/// A boolean indicating if the updates should be wrapped in a transaction.
 	/// </param>
 	/// <returns>
 	/// The number of rows modified.
@@ -1729,13 +1764,15 @@ public class SQLiteConnection : IDisposable
 	}
 
 	/// <summary>
-	/// Updates all specified objects.
+	/// Updates all specified objects using a custom table mapping, replacing non-primary key columns in the table associated with the type.
 	/// </summary>
+	/// <typeparam name="T">The type that maps to the database table.</typeparam>
+	/// <param name="map">The <see cref="TableMapping"/> that defines how the objects map to database columns.</param>
 	/// <param name="objects">
-	/// An <see cref="IEnumerable"/> of the objects to insert.
+	/// An <see cref="IEnumerable"/> of the objects to update.
 	/// </param>
 	/// <param name="runInTransaction">
-	/// A boolean indicating if the inserts should be wrapped in a transaction
+	/// A boolean indicating if the updates should be wrapped in a transaction.
 	/// </param>
 	/// <returns>
 	/// The number of rows modified.
@@ -1780,15 +1817,15 @@ public class SQLiteConnection : IDisposable
 	#region Delete
 
 	/// <summary>
-	/// Deletes the given object from the database using its primary key.
+	/// Deletes the given object from the database using its primary key. The mapping is determined by the type of the object.
 	/// </summary>
 	/// <param name="item">
-	/// The object to delete. It must have a primary key designated using the PrimaryKeyAttribute.
+	/// The object to delete. The table associated with the item must have a primary key.
 	/// </param>
 	/// <returns>
 	/// The number of rows deleted.
 	/// </returns>
-	[RequiresUnreferencedCode("This method requires ''DynamicallyAccessedMemberTypes.All' on the runtime type of 'objectToDelete'.")]
+	[RequiresUnreferencedCode("This method requires ''DynamicallyAccessedMemberTypes.All' on the runtime type of 'item'.")]
 	public int Delete(object item)
 	{
 		var map = GetMapping(item.GetType());
@@ -1804,17 +1841,15 @@ public class SQLiteConnection : IDisposable
 	}
 
 	/// <summary>
-	/// Deletes the object with the specified primary key.
+	/// Deletes the object with the specified primary key from the table associated with the given type.
 	/// </summary>
+	/// <typeparam name="T">The type that maps to the database table.</typeparam>
 	/// <param name="primaryKey">
-	/// The primary key of the object to delete.
+	/// The primary key value(s) of the object to delete. Provide multiple values for composite keys.
 	/// </param>
 	/// <returns>
 	/// The number of objects deleted.
 	/// </returns>
-	/// <typeparam name='T'>
-	/// The type of object.
-	/// </typeparam>
 	public int Delete<
 		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
 		T>(params object[] primaryKey)
@@ -1823,13 +1858,11 @@ public class SQLiteConnection : IDisposable
 	}
 
 	/// <summary>
-	/// Deletes the object with the specified primary key.
+	/// Deletes the object with the specified primary key using a custom table mapping.
 	/// </summary>
+	/// <param name="map">The <see cref="TableMapping"/> used to identify the table and columns.</param>
 	/// <param name="primaryKey">
-	/// The primary key of the object to delete.
-	/// </param>
-	/// <param name="map">
-	/// The TableMapping used to identify the table.
+	/// The primary key value(s) of the object to delete. Provide multiple values for composite keys.
 	/// </param>
 	/// <returns>
 	/// The number of objects deleted.
@@ -1846,16 +1879,12 @@ public class SQLiteConnection : IDisposable
 	}
 
 	/// <summary>
-	/// Deletes all the objects from the specified table.
-	/// WARNING WARNING: Let me repeat. It deletes ALL the objects from the
-	/// specified table. Do you really want to do that?
+	/// Deletes ALL the objects from the table associated with the given type. Equivalent to a TRUNCATE in other database engines.
 	/// </summary>
+	/// <typeparam name="T">The type that maps to the database table.</typeparam>
 	/// <returns>
 	/// The number of objects deleted.
 	/// </returns>
-	/// <typeparam name='T'>
-	/// The type of objects to delete.
-	/// </typeparam>
 	public int DeleteAll<
 		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
 		T>()
@@ -1864,13 +1893,9 @@ public class SQLiteConnection : IDisposable
 	}
 
 	/// <summary>
-	/// Deletes all the objects from the specified table.
-	/// WARNING WARNING: Let me repeat. It deletes ALL the objects from the
-	/// specified table. Do you really want to do that?
+	/// Deletes all the objects from the table identified by the given mapping. Equivalent to a TRUNCATE in other database engines.
 	/// </summary>
-	/// <param name="map">
-	/// The TableMapping used to identify the table.
-	/// </param>
+	/// <param name="map">The <see cref="TableMapping"/> used to identify the table.</param>
 	/// <returns>
 	/// The number of objects deleted.
 	/// </returns>
@@ -1885,10 +1910,11 @@ public class SQLiteConnection : IDisposable
 	#endregion
 
 	/// <summary>
-	/// Backup the entire database to the specified path.
+	/// Backs up the entire database to the specified file path, using the inbuilt sqlite3_backup_init to be safe with any journaling mode.
 	/// </summary>
-	/// <param name="destinationDatabasePath">Path to backup file.</param>
-	/// <param name="databaseName">The name of the database to backup (usually "main").</param>
+	/// <param name="destinationDatabasePath">Path to the backup file.</param>
+	/// <param name="databaseName">The name of the database to back up (usually "main").</param>
+	/// <exception cref="SQLiteException">Thrown when the destination cannot be opened or an error occurs during backup.</exception>
 	public void Backup(string destinationDatabasePath, string databaseName)
 	{
 		// Open the destination
@@ -1902,7 +1928,7 @@ public class SQLiteConnection : IDisposable
 		var backup = SQLite3Native.BackupInit(destHandle, databaseName, Handle, databaseName);
 		if (backup == NullBackupHandle)
 		{
-			SQLite3Native.Close(destHandle);
+			SQLite3Native.Close2(destHandle);
 			throw new Exception("Failed to create backup");
 		}
 
@@ -1919,7 +1945,7 @@ public class SQLiteConnection : IDisposable
 		}
 
 		// Close everything and report errors
-		SQLite3Native.Close(destHandle);
+		SQLite3Native.Close2(destHandle);
 		if (r != SQLite3Native.Result.OK)
 		{
 			throw new SQLiteException(r, msg);
@@ -1931,6 +1957,7 @@ public class SQLiteConnection : IDisposable
 		Dispose(false);
 	}
 
+	/// <inheritdoc/>
 	public void Dispose()
 	{
 		Dispose(true);
@@ -1993,7 +2020,8 @@ public class SQLiteConnectionString
 	public SQLiteOpenFlags OpenFlags { get; init; }
 
 	/// <summary>
-	/// Specifies the Virtual File System to use on the database.
+	/// Specifies the Virtual File System to use with the database. Requires you to manually create your own virtual file system implementation.
+	/// <br/> See <see href="https://sqlite.org/c3ref/vfs.html"/>
 	/// </summary>
 	public string? VfsName { get; init; }
 
@@ -2067,14 +2095,10 @@ public class SQLiteConnectionString
 	/// <param name="openFlags">
 	/// Flags controlling how the connection should be opened.
 	/// </param>
-	/// <param name="key">
-	/// Specifies the encryption key to use on the database. Can be cast from a string or a byte[].
-	/// </param>
 	public SQLiteConnectionString(string databasePath, SQLiteOpenFlags openFlags)
 	{
-		OpenFlags = openFlags;
-
 		DatabasePath = databasePath;
+		OpenFlags = openFlags;
 	}
 #endif
 }

@@ -7,11 +7,14 @@ namespace FourLambda.SQLite;
 /// <param name="message">An associated human-readable string message.</param>
 public class SQLiteException(SQLite3Native.Result nativeResult, string message) : Exception(message)
 {
+	/// <summary>Gets the native SQLite result code that caused this exception.</summary>
 	public SQLite3Native.Result Result { get; } = nativeResult;
 }
 
+/// <summary>Thrown when a NOT NULL constraint is violated during an INSERT or UPDATE operation.</summary>
 public class NotNullConstraintViolationException : SQLiteException
 {
+	/// <summary>Gets the columns that violated the NOT NULL constraint.</summary>
 	public IEnumerable<TableColumn> Columns { get; protected set; }
 
 	internal NotNullConstraintViolationException(SQLite3Native.Result nativeResult, string message, TableMapping? mapping, object? obj)
@@ -24,8 +27,10 @@ public class NotNullConstraintViolationException : SQLiteException
 	}
 }
 
+/// <summary>P/Invoke bindings for the native SQLite3 C library.</summary>
 public static class SQLite3Native
 {
+	/// <summary>Standard SQLite result codes returned by the native API.</summary>
 	public enum Result : int
 	{
 		OK = 0,
@@ -61,6 +66,7 @@ public static class SQLite3Native
 		Done = 101
 	}
 
+	/// <summary>Extended SQLite result codes with additional error category bits in the upper byte.</summary>
 	public enum ExtendedResult : int
 	{
 		IOErrorRead = (Result.IOError | (1 << 8)),
@@ -110,6 +116,7 @@ public static class SQLite3Native
 		NoticeRecoverRollback = (Result.Notice | (2 << 8))
 	}
 
+	/// <summary>Thread-safety configuration modes passed to sqlite3_config.</summary>
 	public enum ConfigOption : int
 	{
 		SingleThread = 1,
