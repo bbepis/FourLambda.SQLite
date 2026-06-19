@@ -1,22 +1,10 @@
-<div align="center">
-  <h3 align="center">FourLambda.SQLite</h3>
-
-  <p align="center">
-    SQLite ORM and bindings for C#
-    <br />
-    <a href="https://github.com/bbepis/FourLambda.SQLite"><strong>Project page »</strong></a>
-    <br />
-  </p>
-</div>
-
-
-
-## Overview
+## About
 
 This package is a simple, high-performance alternative to `sqlite-net` and `Microsoft.Data.Sqlite` with up to **2x** faster insertion and row reading.
 
 It handles table creation, migration, and general data insertion/updating/deletion, all in one simple library.
 
+#### **[Project page & full documentation »](https://github.com/bbepis/FourLambda.SQLite)**
 
 ## Getting Started
 
