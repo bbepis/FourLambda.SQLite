@@ -13,21 +13,21 @@ public class QueryAllBenchmarks
 	public void GlobalSetup_SqliteNet()
 	{
 		Console.WriteLine("Inserting into SQLite.SQLiteConnection");
-		InsertionHelper.Insert_SqliteNet();
+		SqliteNetConnection = InsertionHelper.Insert_SqliteNet();
 	}
 
 	[GlobalSetup(Targets = [nameof(QueryAll_FourLambda), nameof(QueryAllAsValueTuple_FourLambda), nameof(QueryAllReader_FourLambda), nameof(QueryAllReaderSkipping_FourLambda)])]
 	public void GlobalSetup_FourLambda()
 	{
 		Console.WriteLine("Inserting into FourLambda.SQLite.SQLiteConnection");
-		InsertionHelper.Insert_FourLambda();
+		LambdaSqliteConnection = InsertionHelper.Insert_FourLambda();
 	}
 
 	[GlobalSetup(Targets = [nameof(QueryAllReader_Microsoft), nameof(QueryAllReaderSkipping_Microsoft)])]
 	public void GlobalSetup_Microsoft()
 	{
 		Console.WriteLine("Inserting into Microsoft.Data.Sqlite.SqliteConnection");
-		InsertionHelper.Insert_Microsoft();
+		MicrosoftSqliteConnection = InsertionHelper.Insert_Microsoft();
 	}
 
 	[GlobalCleanup]

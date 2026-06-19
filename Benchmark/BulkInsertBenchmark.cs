@@ -83,7 +83,7 @@ internal static class InsertionHelper
 
 		var connection = new SQLite.SQLiteConnection(":memory:");
 		connection.CreateTable<BenchmarkItem>();
-		connection.InsertAll(GenerateItems());
+		connection.InsertAll(items ?? GenerateItems());
 
 		return connection;
 	}
@@ -140,7 +140,7 @@ EnumValue) VALUES ($aaaa, $bbbb, $cccc, $dddd)";
 
 			bulkCopy.Prepare();
 
-			foreach (var item in GenerateItems())
+			foreach (var item in items ?? GenerateItems())
 			{
 				idParam.Value = item.ID;
 				valueParam.Value = item.Value;
@@ -177,7 +177,7 @@ PRIMARY KEY (ID)
 
 		var db = new DataConnection(dbOptions);
 
-		db.BulkCopy(items);
+		db.BulkCopy(items ?? GenerateItems());
 
 		return (db, connection);
 	}
